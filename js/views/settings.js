@@ -62,7 +62,7 @@ export const settingsView = {
         },
         [button('export', 'export', 'Export Backup (JSON)', { disabled: !store.assets.length }), button('import', 'import', 'Import Backup')],
       )}
-      ${group({ title: 'Mutual Fund Statement', foot: CAS_HELP }, button('import-cas', 'import','Import Mutual Funds from CAS (PDF)'))}
+      ${group({ title: 'Statements', foot: CAS_HELP }, button('import-cas', 'import', 'Import Funds or Bonds from CAS (PDF)'))}
       ${group({ title: 'Interest Rates' }, html`<a class="row row-link" href="#/settings/rates"><span class="row-label">PPF rate history</span><span class="row-value">${plainNumber(store.rates.currentRate())}% now ${icon('chevron', 'chev')}</span></a>`)}
       ${group(
         { title: 'Reminders', foot: 'Adds each policy’s due date to your calendar with alerts 30, 15 and 3 days before (9 am). Your calendar app delivers them, even when this app is closed. Add again after changing a due date.' },

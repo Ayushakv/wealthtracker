@@ -186,7 +186,7 @@ export function parseCAS(lines) {
   if (!holdings.length) holdings = parseSummary(lines);
   if (!holdings.length) {
     if (/\b(NSDL|CDSL)\b|Central\s+Depository/i.test(all) && !FOLIO_RE.test(all)) {
-      throw new CASError('This is a depository (NSDL/CDSL) statement. Use the CAS from CAMS or KFintech instead — it lists every mutual fund folio.');
+      throw new CASError('This looks like an NSDL/CDSL statement, but no demat account (DP ID / BO ID) was found in it. For mutual funds, use the CAS from CAMS or KFintech.');
     }
     throw new CASError('No mutual fund holdings found. Use the CAS from CAMS or KFintech (a “Detailed” statement works best).');
   }

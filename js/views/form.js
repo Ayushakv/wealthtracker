@@ -45,10 +45,11 @@ const segmented = (name, label, options, value) =>
     (o) => html`<label><input type="radio" name="${name}" data-type="text" value="${o}" ${o === value ? 'checked' : ''}><span>${o}</span></label>`,
   )}</div></div>`;
 
-/** Wrapper shown only while `cond` ("flag" or "key=value") holds for the draft. */
+/** Wrapper shown only while `cond` ("flag", "!flag" or "key=value") holds for the draft. */
 const showIf = (cond, d, body) => html`<div data-show-if="${cond}" ${matches(cond, d) ? '' : 'hidden'}>${body}</div>`;
 
 function matches(cond, d) {
+  if (cond.startsWith('!')) return !matches(cond.slice(1), d);
   const [key, value] = cond.split('=');
   return value === undefined ? !!d[key] : String(d[key]) === value;
 }
@@ -189,16 +190,23 @@ function categorySections(d, { rates, now }) {
 
     case Category.bonds:
       return html`
-        ${group({ title: 'Instrument' }, [
-          amountField('investedAmount', 'Principal', d.investedAmount),
-          percentField('interestRate', 'Coupon / interest rate', d.interestRate),
-          select('compounding', 'Compounding', COMPOUNDING.map((c) => ({ value: c.raw, label: c.raw })), d.compounding),
-          toggle('isPayout', 'Interest paid out (non-cumulative)', d.isPayout),
-          dateField('startDate', 'Start date', d.startDate),
-          toggle('hasMaturityDate', 'Has maturity date', d.hasMaturityDate),
-          showIf('hasMaturityDate', d, dateField('maturityDate', 'Maturity', d.maturityDate, { min: d.startDate })),
-        ])}
-        <div data-derived="projection">${projection(d)}</div>`;
+        ${group(
+          { title: 'Instrument', foot: 'Turn off interest calculation for market-traded bonds (SGBs, NCDs, G-secs) to enter the current value from your demat statement instead.' },
+          [
+            amountField('investedAmount', 'Principal', d.investedAmount),
+            percentField('interestRate', 'Coupon / interest rate', d.interestRate),
+            toggle('hasStartDate', 'Calculate value from interest', d.hasStartDate),
+            showIf('hasStartDate', d, [
+              select('compounding', 'Compounding', COMPOUNDING.map((c) => ({ value: c.raw, label: c.raw })), d.compounding),
+              toggle('isPayout', 'Interest paid out (non-cumulative)', d.isPayout),
+              dateField('startDate', 'Start date', d.startDate),
+            ]),
+            showIf('!hasStartDate', d, amountField('currentValuation', 'Current value', d.currentValuation)),
+            toggle('hasMaturityDate', 'Has maturity date', d.hasMaturityDate),
+            showIf('hasMaturityDate', d, dateField('maturityDate', 'Maturity', d.maturityDate, { min: d.hasStartDate ? d.startDate : undefined })),
+          ],
+        )}
+        <div data-derived="projection" ${d.hasStartDate ? '' : 'hidden'}>${projection(d)}</div>`;
 
     case Category.p2p:
       return group({ title: 'Ledger', foot: 'Copy these totals from your LenDenClub dashboard. Outstanding balance is what counts towards net worth.' }, [
@@ -267,8 +275,9 @@ function update(form, ctx) {
   if (d.category === Category.mutualFund) derived('mf-nav', mfNav(d));
   if (d.category === Category.bonds) {
     derived('projection', projection(d));
+    form.querySelector('[data-derived="projection"]').hidden = !d.hasStartDate;
     const maturity = form.querySelector('[name="maturityDate"]');
-    if (maturity) maturity.min = toInputValue(d.startDate);
+    if (maturity) maturity.min = d.hasStartDate ? toInputValue(d.startDate) : '';
   }
   if (d.category === Category.nps) form.querySelector('[data-derived="nps-total"]').textContent = `Total ${plainNumber(npsAllocationTotal(d))}%`;
 }

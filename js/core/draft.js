@@ -111,6 +111,11 @@ export function validateDraft(d) {
       break;
     case Category.bonds:
       if (!((d.investedAmount ?? 0) > 0)) return 'Enter the principal.';
+      // Without a start date the bond is valued at the current value entered (e.g. imported from a demat statement).
+      if (!d.hasStartDate) {
+        if (d.currentValuation == null) return 'Enter the current value.';
+        break;
+      }
       if (d.interestRate == null) return 'Enter the interest rate.';
       if (d.hasMaturityDate && d.maturityDate < d.startDate) return 'Maturity must be after the start date.';
       break;
@@ -179,7 +184,6 @@ export function applyDraft(d, asset, rates, now = Date.now()) {
       a.compounding = d.compounding;
       a.isPayout = d.isPayout;
       a.maturityDate = d.hasMaturityDate ? d.maturityDate : undefined;
-      a.startDate ??= now;
       break;
     case Category.p2p:
       a.p2pRepaymentsReceived = opt(d.p2pRepaymentsReceived);

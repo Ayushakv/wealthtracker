@@ -12,16 +12,29 @@ Tracks bank accounts, real estate, mutual funds (live NAVs from mfapi.in), PPF (
 - **CAS import** reads the PDF in the browser; the file and its password never leave the device.
 - **Backups:** Settings → Export Backup saves a plain JSON file. It's the same format as the earlier iPhone app, so old backups import directly. Importing merges by asset ID, so importing the same file twice doesn't create duplicates.
 
-## Import mutual funds from your CAS
+## Import from your CAS
 
-Assets → **+** → **Import Mutual Funds from CAS** (also in Settings). It reads a CAMS + KFintech Consolidated Account Statement and creates or updates one fund per folio and scheme, with units, cost and NAV.
+Assets → **+** → **Import Funds or Bonds from CAS** (also in Settings). It tells the two kinds of statement apart by itself.
+
+### Mutual funds (CAMS + KFintech)
+
+It reads a CAMS + KFintech Consolidated Account Statement and creates or updates one fund per folio and scheme, with units, cost and NAV.
 
 1. Request a **Detailed** CAS on camsonline.com or kfintech.com, choosing a password. It arrives by email as a PDF.
 2. Import the PDF and enter that password. Review the list, then tap **Import**.
 
 How it matches: a fund imported before is matched by ISIN + folio, so re-importing a newer statement updates it. A fund you added by hand is matched by AMFI code if exactly one fund in the statement has that code. Fully redeemed funds are skipped unless they're already in the portfolio. The ISIN on the statement is turned into an AMFI code with `data/isin-amfi.json` so live NAVs keep working; a fund with no match keeps the statement's NAV.
 
-NSDL/CDSL depository statements aren't supported; they're refused with a message pointing to the CAMS/KFintech one. The parser (`js/core/cas.js`) was built against the CAS layout and a synthetic statement, not a real one; if a real statement imports wrongly, that's the place to adjust, with a test in `tests/cas.test.js`.
+### Bonds in a demat account (NSDL or CDSL)
+
+The NSDL or CDSL CAS, emailed monthly to anyone with a demat account, lists sovereign gold bonds, government securities and corporate bonds/NCDs with their market value. Each bond becomes a Bonds & FDs asset valued at that market value, with the coupon and maturity when the statement shows them. Shares and fund units in the same statement are skipped; mutual funds come from the CAMS/KFintech statement.
+
+- The statement has no purchase price, so the principal starts at the market value. Edit it to see your gain.
+- These bonds have **Calculate value from interest** turned off. Re-importing a newer statement updates their value. Turn it on (with a start date) to calculate accrued interest the way FDs do.
+- Re-imports match by ISIN + demat account. Bonds you entered by hand have no ISIN, so the review lets you untick them to avoid duplicates.
+- Bank FDs aren't in any statement an app can read; they stay manual.
+
+Both parsers (`js/core/cas.js`, `js/core/demat.js`) were built from the published layouts and synthetic statements, not real ones. If a real statement imports wrongly, adjust the parser and add a test in `tests/cas.test.js` or `tests/demat.test.js`.
 
 ## Run it locally
 
@@ -75,6 +88,6 @@ js/views/    one file per screen
 js/app.js    router and shell
 vendor/      pdf.js 4.10.38 (Apache 2.0), loaded only for CAS import
 data/        ISIN → AMFI scheme code map, generated from AMFI's NAVAll.txt
-tests/       unit tests; fixtures/ has a synthetic password-protected CAS (password ABCDE1234F)
+tests/       unit tests; fixtures/ has synthetic password-protected CAMS and NSDL statements (password ABCDE1234F)
 tools/       local server, Chrome end-to-end test, ISIN map generator
 ```

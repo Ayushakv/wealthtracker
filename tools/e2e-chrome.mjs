@@ -285,6 +285,35 @@ try {
   await shot('cas-fund-detail', { full: true });
   await go('#/assets');
 
+  step('Import bonds from an NSDL statement, unticking one');
+  await click('details.menu > summary');
+  await chooseFile('[data-action="import-cas"]', fileURLToPath(new URL('../tests/fixtures/sample-nsdl.pdf', import.meta.url)));
+  await waitFor(`document.querySelector('dialog[open] [name="password"]')`, 'password dialog', 15_000);
+  await fill('dialog [name="password"]', 'ABCDE1234F');
+  await click('dialog .btn-primary');
+  await waitFor(`document.querySelector('dialog[open] .cas-list')`, 'bond review dialog', 15_000);
+  assert((await text('dialog h2')) === 'Import 3 Bonds', 'bond review title');
+  const bonds = await evaluate(`[...document.querySelectorAll('dialog .cas-item')].map((li) => li.textContent.replace(/\\s+/g, ' ').trim())`);
+  assert(bonds.some((r) => r.includes('SGB 2020-21 SERIES VIII') && r.includes('2.5%') && r.includes('₹1,50,240') && r.includes('New')), `SGB listed (${JSON.stringify(bonds)})`);
+  await shot('bond-review');
+  await evaluate(`[...document.querySelectorAll('dialog .cas-item')].find((l) => l.textContent.includes('GOI LOAN')).querySelector('input').click()`);
+  await click('dialog [data-ok]');
+  await waitFor(`document.querySelector('#toast.show')?.textContent.includes('Imported 2 bonds')`, 'bond import toast');
+  await waitFor(`location.hash === '#/assets' && document.querySelectorAll('a.list-row').length === ${assetCount + 5}`, 'two bonds added');
+  assert(!(await text('main')).includes('GOI LOAN'), 'unticked bond not imported');
+  const sgb = await evaluate(`[...document.querySelectorAll('a.list-row')].find((a) => a.textContent.includes('SGB 2020-21'))?.getAttribute('href')`);
+  await go(sgb);
+  await waitFor(`document.querySelector('h1')?.textContent.includes('SGB 2020-21')`, 'imported bond detail');
+  const bondDetail = await text('main');
+  assert(bondDetail.includes('₹1,50,240') && bondDetail.includes('IN30009512345678') && bondDetail.includes('IN0020200195') && bondDetail.includes('10 Nov 2028'), `bond value, account, ISIN and maturity shown (${bondDetail})`);
+  await shot('bond-detail', { full: true });
+  await go(`${sgb}/edit`);
+  await waitFor(`document.querySelector('[name="hasStartDate"]')`, 'bond edit form');
+  const bondForm = await evaluate(`({ accrual: document.querySelector('[name="hasStartDate"]').checked, value: document.querySelector('[name="currentValuation"]').closest('[data-show-if]').hidden, start: document.querySelector('[name="startDate"]').closest('[data-show-if]').hidden, projection: document.querySelector('[data-derived="projection"]').hidden })`);
+  assert(!bondForm.accrual && !bondForm.value && bondForm.start && bondForm.projection, `market-valued bond edits its current value (${JSON.stringify(bondForm)})`);
+  await shot('bond-edit');
+  await go('#/assets');
+
   step('Turn on passcode → data encrypted at rest');
   await go('#/settings');
   await waitFor(`document.querySelector('[data-action="set-passcode"]')`, 'settings');

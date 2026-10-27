@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { linesFromItems, pdfLines, PDFPasswordError } from '../js/ui/pdf.js';
 import { parseCAS } from '../js/core/cas.js';
+import { isDepositoryStatement, parseDematBonds } from '../js/core/demat.js';
 
-const fixture = async () => (await readFile(new URL('./fixtures/sample-cas.pdf', import.meta.url))).buffer;
+const fixture = async (name = 'sample-cas.pdf') => (await readFile(new URL(`./fixtures/${name}`, import.meta.url))).buffer;
 
 test('a password-protected CAS PDF is read and parsed', async () => {
   const data = await fixture();
@@ -19,6 +20,19 @@ test('a password-protected CAS PDF is read and parsed', async () => {
       ['9876543', 'INF879O01027', 1226.388],
       ['4040404040', 'INF204K01K15', 0],
       ['55555', 'INF000X01234', 10],
+    ],
+  );
+});
+
+test('bonds are read from a password-protected NSDL statement', async () => {
+  const lines = await pdfLines(await fixture('sample-nsdl.pdf'), 'ABCDE1234F');
+  assert.ok(isDepositoryStatement(lines));
+  assert.deepEqual(
+    parseDematBonds(lines).holdings.map((h) => [h.isin, h.name, h.value, h.coupon, h.account]),
+    [
+      ['IN0020200195', 'SGB 2020-21 SERIES VIII', 150240, 2.5, 'IN30009512345678'],
+      ['IN0020230085', 'GOI LOAN 7.18% 2033', 101250, 7.18, 'IN30009512345678'],
+      ['INE001A07RU8', 'EXAMPLE HOUSING FINANCE LIMITED SR-X 8.25% NCD', 25312.5, 8.25, 'IN30009512345678'],
     ],
   );
 });

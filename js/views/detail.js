@@ -45,7 +45,14 @@ function categoryDetails(a, store, now) {
 
     case Category.bonds: {
       const v = fixedIncomeFor(a, now);
-      if (!v) return '';
+      const holding = [opt('Demat account', a.folio), opt('ISIN', a.isin)];
+      if (!v) {
+        return group({ title: 'Bond', foot: 'Valued at the current value you entered or imported. Edit it to update, or turn on interest calculation.' }, [
+          opt('Coupon', a.interestRate, (r) => `${plainNumber(r)}%`),
+          opt('Maturity', a.maturityDate, formatDate),
+          holding,
+        ]);
+      }
       return group({ title: 'Interest' }, [
         row('Rate', `${plainNumber(a.interestRate ?? 0)}% · ${a.compounding ?? DEFAULT_COMPOUNDING}`),
         row('Mode', a.isPayout ? 'Payout' : 'Cumulative'),
@@ -53,6 +60,7 @@ function categoryDetails(a, store, now) {
         opt('Start', a.startDate, formatDate),
         opt('Maturity', a.maturityDate, formatDate),
         opt('Value at maturity', v.maturityValue, inr),
+        holding,
       ]);
     }
 

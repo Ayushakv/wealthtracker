@@ -1,0 +1,67 @@
+<!doctype html>
+<!--
+  Synthetic NSDL-style CAS (made-up investor and holdings) used by the PDF tests and the end-to-end test.
+  Rebuild sample-nsdl.pdf (password ABCDE1234F) with:
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless --no-pdf-header-footer \
+      --print-to-pdf=plain.pdf tests/fixtures/sample-nsdl.html
+    qpdf --encrypt ABCDE1234F ABCDE1234F 256 -- plain.pdf tests/fixtures/sample-nsdl.pdf
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>NSDL Consolidated Account Statement</title>
+<style>
+  @page { size: A4; margin: 14mm; }
+  body { font: 8.5pt Helvetica, Arial, sans-serif; color: #000; }
+  h1 { font-size: 13pt; margin: 0 0 2mm; }
+  h2 { font-size: 10pt; margin: 5mm 0 1mm; }
+  p { margin: 0 0 1.6mm; white-space: nowrap; }
+  table { border-collapse: collapse; margin: 1mm 0 2mm; }
+  td, th { padding: 0.6mm 3mm 0.6mm 0; text-align: left; font-weight: normal; vertical-align: top; }
+  td.n { text-align: right; }
+  td.desc { width: 60mm; }
+  .gap { margin-left: 10mm; }
+</style>
+</head>
+<body>
+<h1>NSDL Consolidated Account Statement</h1>
+<p>Statement for the period from 01-Sep-2026 to 30-Sep-2026</p>
+<p>A. N. Investor, 12 Example Road, Pune 411001</p>
+
+<h2>NSDL Demat Account</h2>
+<p>DP Name: EXAMPLE BROKING LIMITED</p>
+<p>DP ID: IN300095<span class="gap">Client ID: 12345678</span></p>
+
+<h2>Equities (E)</h2>
+<table>
+  <tr><th>ISIN</th><th>Stock Symbol</th><th>Company Name</th><th>Face Value</th><th>No. of Shares</th><th>Market Price</th><th>Value (₹)</th></tr>
+  <tr><td>INE002A01018</td><td>RELIANCE</td><td>RELIANCE INDUSTRIES LIMITED</td><td class="n">10.00</td><td class="n">50</td><td class="n">2,950.10</td><td class="n">1,47,505.00</td></tr>
+</table>
+
+<h2>Government Securities (G)</h2>
+<table>
+  <tr><th>ISIN</th><th>Security</th><th>Coupon Rate</th><th>Maturity Date</th><th>Face Value</th><th>No. of Units</th><th>Market Price</th><th>Value (₹)</th></tr>
+  <tr><td>IN0020200195</td><td>SGB 2020-21 SERIES VIII</td><td>2.50%</td><td>10-Nov-2028</td><td class="n">1.00</td><td class="n">20</td><td class="n">7,512.00</td><td class="n">1,50,240.00</td></tr>
+  <tr><td>IN0020230085</td><td>GOI LOAN 7.18% 2033</td><td>7.18%</td><td>14-Aug-2033</td><td class="n">100.00</td><td class="n">1,000</td><td class="n">101.25</td><td class="n">1,01,250.00</td></tr>
+</table>
+
+<h2>Corporate Bonds (C)</h2>
+<table>
+  <tr><th>ISIN</th><th>Description</th><th>Face Value</th><th>No. of Bonds</th><th>Market Price</th><th>Value (₹)</th></tr>
+  <tr><td>INE001A07RU8</td><td class="desc">EXAMPLE HOUSING FINANCE LIMITED SR-X 8.25% NCD</td><td class="n">1,000.00</td><td class="n">25</td><td class="n">1,012.50</td><td class="n">25,312.50</td></tr>
+</table>
+
+<h2>Mutual Fund Folios (F)</h2>
+<table>
+  <tr><th>ISIN</th><th>Scheme</th><th>Units</th><th>NAV</th><th>Value (₹)</th></tr>
+  <tr><td>INF179K01UT0</td><td>HDFC FLEXI CAP FUND - DIRECT GROWTH</td><td class="n">112.345</td><td class="n">2,143.156</td><td class="n">2,40,770.54</td></tr>
+</table>
+
+<h2>Transactions for the period from 01-Sep-2026 to 30-Sep-2026</h2>
+<p>INE001A07RU8 EXAMPLE HOUSING FINANCE LIMITED SR-X 8.25% NCD</p>
+<table>
+  <tr><th>Date</th><th>Particulars</th><th>Opening</th><th>Credit</th><th>Debit</th><th>Closing</th></tr>
+  <tr><td>05-Sep-2026</td><td>By Purchase</td><td class="n">0</td><td class="n">25</td><td class="n">0</td><td class="n">25</td></tr>
+</table>
+</body>
+</html>

@@ -1,12 +1,13 @@
 import { assetFromHolding, CASError, parseCAS, planCASImport } from '../core/cas.js';
-import { formatDate, inr, number } from '../core/format.js';
+import { bondFromHolding, isDepositoryStatement, parseDematBonds, planBondImport } from '../core/demat.js';
+import { formatDate, inr, number, plainNumber } from '../core/format.js';
 import { hideToast, pickFile, showDialog, toast } from '../ui/dom.js';
 import { html } from '../ui/html.js';
 import { icon } from '../ui/icons.js';
 import { pdfLines, PDFPasswordError } from '../ui/pdf.js';
 
 export const CAS_HELP =
-  'Request a Detailed Consolidated Account Statement (CAMS + KFintech) on camsonline.com or kfintech.com. It arrives by email as a PDF locked with the password you choose. The PDF is read on this device and never uploaded.';
+  'Mutual funds: request a Detailed Consolidated Account Statement on camsonline.com or kfintech.com; it arrives by email as a PDF locked with the password you choose. Bonds, SGBs and NCDs in a demat account: use the monthly NSDL or CDSL CAS emailed to you (usually locked with your PAN). The PDF is read on this device and never uploaded.';
 
 /** ISIN → AMFI scheme code, bundled so no scheme list is fetched. Without it, funds keep the statement's NAV. */
 async function loadSchemeMap() {
@@ -94,13 +95,83 @@ function reviewDialog(statement, rows, skipped) {
   );
 }
 
-/** Picks a CAS PDF, previews what changes, and saves the funds. */
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+function bondRow({ item, asset }, i) {
+  const h = item.holding;
+  const before = item.existing?.currentValuation;
+  const detail = [h.isin, asset.interestRate != null && `${plainNumber(asset.interestRate)}%`, asset.maturityDate != null && `Matures ${formatDate(asset.maturityDate)}`]
+    .filter(Boolean)
+    .join(' · ');
+  return html`<li><label class="cas-item">
+    <input type="checkbox" name="pick" value="${i}" checked>
+    <span class="stack">
+      <span class="name">${asset.name}</span>
+      <span class="muted small">${detail}</span>
+    </span>
+    <span class="stack end">
+      <span class="num">${item.action === 'update' && before !== asset.currentValuation ? html`<span class="muted small">${inr(before ?? 0)} →</span> ` : ''}${inr(asset.currentValuation)}</span>
+      <span class="small ${item.action === 'new' ? 'pos' : 'muted'}">${item.action === 'new' ? 'New' : 'Update'}</span>
+    </span>
+  </label></li>`;
+}
+
+function bondReviewDialog(statement, rows, missing) {
+  const notes = [
+    rows.some((r) => r.item.action === 'new') && 'Untick bonds you’ve already added by hand, so they aren’t counted twice.',
+    missing && `${plural(missing, 'bond')} from an earlier import ${missing === 1 ? 'isn’t' : 'aren’t'} in this statement (sold or matured?) and ${missing === 1 ? 'is' : 'are'} left as ${missing === 1 ? 'it is' : 'they are'}.`,
+    'Only bonds are imported. For mutual funds, use the CAMS/KFintech statement.',
+  ].filter(Boolean);
+  return showDialog(
+    html`<form method="dialog" class="sheet">
+      <h2>Import ${plural(rows.length, 'Bond')}</h2>
+      <p class="muted">${statement.asOf != null ? `Statement as on ${formatDate(statement.asOf)}. ` : ''}Each bond is valued at the statement’s market value. The statement doesn’t show what you paid, so edit a bond’s principal to see its gain.</p>
+      <ul class="cas-list plain-list">${rows.map(bondRow)}</ul>
+      ${notes.map((n) => html`<p class="small muted">${icon('info')} ${n}</p>`)}
+      <div class="sheet-actions">
+        <button value="cancel" class="btn" formnovalidate>Cancel</button>
+        <button value="ok" class="btn btn-primary" data-ok>Import</button>
+      </div>
+    </form>`,
+    {
+      className: 'wide',
+      onMount(dialog, form) {
+        form.addEventListener('change', () => {
+          dialog.querySelector('[data-ok]').disabled = !form.querySelector('[name="pick"]:checked');
+        });
+      },
+      collect: (form) => [...form.querySelectorAll('[name="pick"]:checked')].map((el) => rows[Number(el.value)]),
+    },
+  );
+}
+
+async function importBonds(lines, { store, navigate }) {
+  const statement = parseDematBonds(lines);
+  const now = Date.now();
+  const { items, missing } = planBondImport(statement, store.assets);
+  const rows = items.filter((item) => item.action !== 'skip').map((item) => ({ item, asset: bondFromHolding(item, now) }));
+  if (!rows.length) {
+    toast('No bonds with a balance in this statement — nothing to import.', { duration: 6000 });
+    return;
+  }
+  const picked = await bondReviewDialog(statement, rows, missing.length);
+  if (!picked?.length) return;
+  await store.upsertMany(picked.map((r) => r.asset));
+  navigate('#/assets');
+  toast(`Imported ${plural(picked.length, 'bond')}.`);
+}
+
+/** Picks a CAS PDF (CAMS/KFintech for funds, NSDL/CDSL for bonds), previews what changes, and saves. */
 export async function importCAS({ store, navigate }) {
   const file = await pickFile('.pdf,application/pdf');
   if (!file) return;
   try {
     const lines = await readStatement(file);
     if (!lines) return;
+    if (isDepositoryStatement(lines)) {
+      await importBonds(lines, { store, navigate });
+      return;
+    }
     const statement = parseCAS(lines);
     const schemes = await loadSchemeMap();
     const now = Date.now();

@@ -672,7 +672,9 @@ dialog.wide { width: min(560px, calc(100vw - 32px)); }
 /* CAS import review: the fund list scrolls so the buttons stay in view. */
 .cas-list { max-height: 50vh; overflow-y: auto; border-radius: 12px; background: var(--fill); }
 .cas-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; }
-.cas-item + .cas-item { border-top: 0.5px solid var(--sep); }
+.cas-item + .cas-item, .cas-list > li + li > .cas-item { border-top: 0.5px solid var(--sep); }
+label.cas-item { cursor: pointer; }
+.cas-item input[type="checkbox"] { flex: none; width: 20px; height: 20px; margin: 0; accent-color: var(--accent); }
 .sheet .icon { vertical-align: -0.15em; }
 .sheet-actions .btn { height: 42px; min-width: 96px; }
 
