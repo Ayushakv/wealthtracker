@@ -1,6 +1,8 @@
 // Offline support: every app file is cached on install and served cache-first.
-// Bump VERSION whenever any file in PRECACHE changes so phones pick up the new build.
-const VERSION = 'wt-v1';
+// The PDF reader (vendor/) and ISIN map (data/) are large and only needed for CAS imports, so they are
+// cached the first time they are used instead. Bump VERSION whenever any of these files change.
+const VERSION = 'wt-v2';
+const LAZY = /\/(vendor|data)\//;
 
 const PRECACHE = [
   './',
@@ -16,6 +18,7 @@ const PRECACHE = [
   'js/core/assets.js',
   'js/core/backup.js',
   'js/core/calendar.js',
+  'js/core/cas.js',
   'js/core/categories.js',
   'js/core/draft.js',
   'js/core/fixedIncome.js',
@@ -31,7 +34,9 @@ const PRECACHE = [
   'js/ui/donut.js',
   'js/ui/html.js',
   'js/ui/icons.js',
+  'js/ui/pdf.js',
   'js/views/assets.js',
+  'js/views/casImport.js',
   'js/views/common.js',
   'js/views/dashboard.js',
   'js/views/detail.js',
@@ -69,7 +74,10 @@ self.addEventListener('fetch', (event) => {
       const cache = await caches.open(VERSION);
       // Every page URL is the same single-page app.
       const cached = await cache.match(request.mode === 'navigate' ? 'index.html' : request, { ignoreSearch: true });
-      return cached ?? fetch(request);
+      if (cached) return cached;
+      const response = await fetch(request);
+      if (response.ok && LAZY.test(url.pathname)) await cache.put(request, response.clone());
+      return response;
     })(),
   );
 });

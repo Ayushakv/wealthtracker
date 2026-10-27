@@ -6,6 +6,7 @@ import { MIN_PASSCODE_LENGTH } from '../store/crypto.js';
 import { confirmDialog, deliverFile, pickTextFile, showDialog, toast } from '../ui/dom.js';
 import { html, setHTML } from '../ui/html.js';
 import { icon } from '../ui/icons.js';
+import { CAS_HELP, importCAS } from './casImport.js';
 import { group, pageHead, row } from './common.js';
 
 const isStandalone = () => globalThis.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true;
@@ -61,6 +62,7 @@ export const settingsView = {
         },
         [button('export', 'export', 'Export Backup (JSON)', { disabled: !store.assets.length }), button('import', 'import', 'Import Backup')],
       )}
+      ${group({ title: 'Mutual Fund Statement', foot: CAS_HELP }, button('import-cas', 'import','Import Mutual Funds from CAS (PDF)'))}
       ${group({ title: 'Interest Rates' }, html`<a class="row row-link" href="#/settings/rates"><span class="row-label">PPF rate history</span><span class="row-value">${plainNumber(store.rates.currentRate())}% now ${icon('chevron', 'chev')}</span></a>`)}
       ${group(
         { title: 'Reminders', foot: 'Adds each policy’s due date to your calendar with alerts 30, 15 and 3 days before (9 am). Your calendar app delivers them, even when this app is closed. Add again after changing a due date.' },
@@ -109,6 +111,8 @@ export const settingsView = {
         toast(`Import failed: ${e.message}`, { kind: 'error', duration: 6000 });
       }
     },
+
+    'import-cas': (_, ctx) => importCAS(ctx),
 
     async 'all-to-calendar'(_, { store }) {
       const policies = store.assets.filter((a) => a.category === Category.insurance && a.policyRenewalDate != null);

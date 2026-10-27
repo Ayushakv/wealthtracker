@@ -105,7 +105,8 @@ export function validateDraft(d) {
       if (d.bankLast4 && !/^\d{4}$/.test(d.bankLast4)) return 'Last 4 digits must be 4 numbers.';
       break;
     case Category.mutualFund:
-      if (!/^\d+$/.test(d.amfiCode)) return 'Enter a numeric AMFI scheme code.';
+      // Funds imported from a CAS whose ISIN had no AMFI code keep the statement's NAV instead.
+      if (d.amfiCode ? !/^\d+$/.test(d.amfiCode) : d.latestNAV == null) return 'Enter a numeric AMFI scheme code.';
       if (!((d.unitsHeld ?? 0) > 0)) return 'Enter units held.';
       break;
     case Category.bonds:

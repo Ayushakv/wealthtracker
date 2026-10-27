@@ -65,6 +65,11 @@ export function toast(message, { action, kind = 'info', duration = 3500 } = {}) 
   if (Number.isFinite(duration)) toastTimer = setTimeout(() => el.classList.remove('show'), duration);
 }
 
+export function hideToast() {
+  clearTimeout(toastTimer);
+  document.getElementById('toast')?.classList.remove('show');
+}
+
 const isTouch = () => globalThis.matchMedia?.('(pointer: coarse)').matches;
 
 /**
@@ -93,16 +98,22 @@ export async function deliverFile(text, filename, type) {
   return true;
 }
 
-/** Opens the system file picker and resolves with the chosen file's text, or null. */
-export function pickTextFile(accept) {
+/** Opens the system file picker and resolves with the chosen File, or null. */
+export function pickFile(accept) {
   return new Promise((resolve) => {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = accept;
-    input.addEventListener('change', async () => resolve(input.files[0] ? await input.files[0].text() : null), { once: true });
+    input.addEventListener('change', () => resolve(input.files[0] ?? null), { once: true });
     input.addEventListener('cancel', () => resolve(null), { once: true });
     input.click();
   });
+}
+
+/** Opens the system file picker and resolves with the chosen file's text, or null. */
+export async function pickTextFile(accept) {
+  const file = await pickFile(accept);
+  return file ? file.text() : null;
 }
 
 /** Parses "1,50,000", "₹ 2.5" etc. Blank or invalid → null. */

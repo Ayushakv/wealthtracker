@@ -5,6 +5,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { startServer } from './serve.mjs';
 
 const CHROME = process.env.CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
@@ -101,6 +102,13 @@ const click = (sel) =>
 const fill = (sel, value) =>
   evaluate(`(() => { const el = document.querySelector(${JSON.stringify(sel)}); if (!el) throw new Error('no ' + ${JSON.stringify(sel)});
     el.value = ${JSON.stringify(value)}; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+/** Clicks something that opens a file picker and answers it with `path` (needs Page.setInterceptFileChooserDialog). */
+async function chooseFile(sel, path) {
+  const chooser = new Promise((r) => cdp.on('Page.fileChooserOpened', r));
+  await click(sel);
+  const { backendNodeId } = await Promise.race([chooser, sleep(10_000).then(() => { throw new Error('Timed out waiting for: file chooser'); })]);
+  await send('DOM.setFileInputFiles', { files: [path], backendNodeId });
+}
 const text = (sel) => evaluate(`document.querySelector(${JSON.stringify(sel)})?.textContent.trim() ?? null`);
 const go = async (hash) => {
   await evaluate(`location.hash = ${JSON.stringify(hash)}`);
@@ -242,13 +250,40 @@ try {
 
   step('Import the same backup (merges by ID, no duplicates)');
   await send('Page.setInterceptFileChooserDialog', { enabled: true });
-  const chooser = new Promise((r) => cdp.on('Page.fileChooserOpened', r));
-  await click('[data-action="import"]');
-  const { backendNodeId } = await Promise.race([chooser, sleep(10_000).then(() => { throw new Error('Timed out waiting for: file chooser'); })]);
-  await send('DOM.setFileInputFiles', { files: [join(downloads, backupFile)], backendNodeId });
+  await chooseFile('[data-action="import"]', join(downloads, backupFile));
   await waitFor(`document.querySelector('#toast.show')?.textContent.includes('Imported ${assetCount + 1} assets')`, 'import toast');
   await go('#/assets');
   await waitFor(`document.querySelectorAll('a.list-row').length === ${assetCount + 1}`, 'no duplicates after import');
+
+  step('Import mutual funds from a password-protected CAS PDF');
+  await click('details.menu > summary');
+  await chooseFile('[data-action="import-cas"]', fileURLToPath(new URL('../tests/fixtures/sample-cas.pdf', import.meta.url)));
+  await waitFor(`document.querySelector('dialog[open] [name="password"]')`, 'password dialog', 15_000);
+  await fill('dialog [name="password"]', 'wrong');
+  await click('dialog .btn-primary');
+  await waitFor(`document.querySelector('dialog[open] [role="alert"]')?.textContent.includes('Incorrect password')`, 'wrong password message', 15_000);
+  await fill('dialog [name="password"]', 'ABCDE1234F');
+  await click('dialog .btn-primary');
+  await waitFor(`document.querySelector('dialog[open] .cas-list')`, 'review dialog', 15_000);
+  const review = await evaluate(`[...document.querySelectorAll('dialog .cas-item')].map((li) => li.textContent.replace(/\\s+/g, ' ').trim())`);
+  assert(review.length === 3, `3 funds to import (got ${JSON.stringify(review)})`);
+  // The sample portfolio's HDFC Flexi Cap (same AMFI code, no folio) is updated rather than duplicated.
+  assert(review.some((r) => r.includes('HDFC Flexi Cap Fund – Direct Growth') && r.includes('412.537 → 112.345') && r.includes('Update')), 'HDFC updated');
+  assert((await text('dialog h2')) === 'Import 3 Funds', 'review title');
+  assert((await text('dialog form')).includes('1 fully redeemed fund'), 'redeemed fund noted');
+  await shot('cas-review');
+  await click('dialog [data-ok]');
+  await waitFor(`document.querySelector('#toast.show')?.textContent.includes('Imported 3 funds')`, 'CAS import toast');
+  await waitFor(`location.hash === '#/assets' && document.querySelectorAll('a.list-row').length === ${assetCount + 3}`, 'two new funds listed');
+  const ppfas = await evaluate(`[...document.querySelectorAll('a.list-row')].find((a) => a.textContent.includes('Parag Parikh'))?.getAttribute('href')`);
+  assert(ppfas, 'Parag Parikh fund listed');
+  await waitFor(`!document.querySelector('[data-action="refresh"]')?.disabled`, 'NAV refresh finished', 20_000);
+  await go(ppfas);
+  await waitFor(`document.querySelector('h1')?.textContent.includes('Parag Parikh')`, 'imported fund detail');
+  const detail = await text('main');
+  assert(detail.includes('9876543') && detail.includes('INF879O01027') && detail.includes('122639') && detail.includes('1,226.388'), 'folio, ISIN, AMFI code and units shown');
+  await shot('cas-fund-detail', { full: true });
+  await go('#/assets');
 
   step('Turn on passcode → data encrypted at rest');
   await go('#/settings');
@@ -308,9 +343,14 @@ try {
 
   step('Offline: service worker serves the app');
   await evaluate(`navigator.serviceWorker.ready.then(() => true)`);
-  const cached = await evaluate(`caches.open('wt-v1').then((c) => c.keys()).then((k) => k.length)`);
-  const precache = (await readFile(new URL('../sw.js', import.meta.url), 'utf8')).match(/PRECACHE = \[([\s\S]*?)\]/)[1].match(/'[^']+'/g).length;
-  assert(cached === precache, `all ${precache} files precached (got ${cached})`);
+  const sw = await readFile(new URL('../sw.js', import.meta.url), 'utf8');
+  const version = sw.match(/const VERSION = '([^']+)'/)[1];
+  const cachedURLs = await evaluate(`caches.open('${version}').then((c) => c.keys()).then((k) => k.map((r) => new URL(r.url).pathname))`);
+  const precache = sw.match(/PRECACHE = \[([\s\S]*?)\]/)[1].match(/'[^']+'/g).length;
+  const lazy = cachedURLs.filter((p) => /\/(vendor|data)\//.test(p));
+  assert(cachedURLs.length - lazy.length === precache, `all ${precache} files precached (got ${cachedURLs.length - lazy.length})`);
+  // Used by the CAS import above, so cached on first use.
+  assert(['pdf.min.mjs', 'pdf.worker.min.mjs', 'isin-amfi.json'].every((f) => lazy.some((p) => p.endsWith(f))), `PDF reader and ISIN map cached (${lazy})`);
   expectNetworkErrors = true;
   await send('Network.enable');
   await send('Network.emulateNetworkConditions', { offline: true, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });

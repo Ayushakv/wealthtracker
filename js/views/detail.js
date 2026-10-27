@@ -25,6 +25,8 @@ function categoryDetails(a, store, now) {
     case Category.mutualFund:
       return group({ title: 'Holding' }, [
         opt('AMFI code', a.amfiCode),
+        opt('Folio', a.folio),
+        opt('ISIN', a.isin),
         opt('Units', a.unitsHeld, (v) => number(v, 3)),
         opt('Average NAV', a.averageNAV, (v) => inr(v, 4)),
         opt('Latest NAV', a.latestNAV, (v) => inr(v, 4)),

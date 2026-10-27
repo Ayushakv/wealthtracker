@@ -26,6 +26,8 @@ export const FIELD_TYPES = Object.freeze({
   averageNAV: 'number',
   latestNAV: 'number',
   navDate: 'date',
+  folio: 'string',
+  isin: 'string',
   pran: 'string',
   npsTier: 'string',
   npsEquityPct: 'number',

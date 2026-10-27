@@ -236,12 +236,19 @@ export class Store extends EventTarget {
     return this.assets.find((a) => a.id === id) ?? null;
   }
 
-  upsert(asset) {
+  async upsert(asset) {
+    await this.upsertMany([asset]);
+    return asset;
+  }
+
+  /** Adds or replaces assets in one save. */
+  upsertMany(assets) {
     return this.mutate(() => {
-      const i = this.assets.findIndex((a) => a.id === asset.id);
-      if (i >= 0) this.assets[i] = asset;
-      else this.assets.push(asset);
-      return asset;
+      for (const asset of assets) {
+        const i = this.assets.findIndex((a) => a.id === asset.id);
+        if (i >= 0) this.assets[i] = asset;
+        else this.assets.push(asset);
+      }
     });
   }
 

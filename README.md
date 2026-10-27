@@ -9,7 +9,19 @@ Tracks bank accounts, real estate, mutual funds (live NAVs from mfapi.in), PPF (
 - Everything stays in this browser's storage (IndexedDB) on this device. Nothing is sent to a server.
 - The only network request is to `api.mfapi.in`, and it sends just the AMFI scheme code to fetch the latest NAV.
 - With a passcode turned on, data is encrypted at rest (AES-GCM-256, key derived with PBKDF2-SHA256 at 600,000 iterations). If you forget the passcode, the data can't be recovered, so keep a backup.
+- **CAS import** reads the PDF in the browser; the file and its password never leave the device.
 - **Backups:** Settings → Export Backup saves a plain JSON file. It's the same format as the earlier iPhone app, so old backups import directly. Importing merges by asset ID, so importing the same file twice doesn't create duplicates.
+
+## Import mutual funds from your CAS
+
+Assets → **+** → **Import Mutual Funds from CAS** (also in Settings). It reads a CAMS + KFintech Consolidated Account Statement and creates or updates one fund per folio and scheme, with units, cost and NAV.
+
+1. Request a **Detailed** CAS on camsonline.com or kfintech.com, choosing a password. It arrives by email as a PDF.
+2. Import the PDF and enter that password. Review the list, then tap **Import**.
+
+How it matches: a fund imported before is matched by ISIN + folio, so re-importing a newer statement updates it. A fund you added by hand is matched by AMFI code if exactly one fund in the statement has that code. Fully redeemed funds are skipped unless they're already in the portfolio. The ISIN on the statement is turned into an AMFI code with `data/isin-amfi.json` so live NAVs keep working; a fund with no match keeps the statement's NAV.
+
+NSDL/CDSL depository statements aren't supported; they're refused with a message pointing to the CAMS/KFintech one. The parser (`js/core/cas.js`) was built against the CAS layout and a synthetic statement, not a real one; if a real statement imports wrongly, that's the place to adjust, with a test in `tests/cas.test.js`.
 
 ## Run it locally
 
@@ -29,7 +41,9 @@ Any static host works: GitHub Pages, Netlify or Cloudflare Pages. Publish this f
 
 The site **must be served over HTTPS** (or from `localhost`). Encryption (`crypto.subtle`) and offline support (the service worker) only work in a secure context, so opening `http://192.168.x.x:8080` from your phone won't work.
 
-When you change any app file, bump `VERSION` in `sw.js` so installed copies pick up the update. `tests/offline.test.js` fails if a new file isn't added to the precache list.
+When you change any app file, bump `VERSION` in `sw.js` so installed copies pick up the update. `tests/offline.test.js` fails if a new file isn't added to the precache list. `vendor/` and `data/` aren't precached (about 2 MB, used only for CAS import); they're cached the first time they're used.
+
+Refresh the ISIN → AMFI code map now and then to pick up new schemes: `node tools/update-isin-map.mjs` (downloads AMFI's NAVAll.txt).
 
 ## Put it on your iPhone
 
@@ -59,5 +73,8 @@ js/store/    IndexedDB, encryption, app state
 js/ui/       HTML templating, icons, donut chart, dialogs/toasts
 js/views/    one file per screen
 js/app.js    router and shell
-tools/       local server and the Chrome end-to-end test
+vendor/      pdf.js 4.10.38 (Apache 2.0), loaded only for CAS import
+data/        ISIN → AMFI scheme code map, generated from AMFI's NAVAll.txt
+tests/       unit tests; fixtures/ has a synthetic password-protected CAS (password ABCDE1234F)
+tools/       local server, Chrome end-to-end test, ISIN map generator
 ```

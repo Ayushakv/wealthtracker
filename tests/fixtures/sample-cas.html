@@ -1,0 +1,79 @@
+<!doctype html>
+<!--
+  Synthetic CAMS-style detailed CAS (made-up investor, real ISINs) used by the PDF tests.
+  Rebuild sample-cas.pdf (password ABCDE1234F) with:
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless --no-pdf-header-footer \
+      --print-to-pdf=plain.pdf tests/fixtures/sample-cas.html
+    qpdf --encrypt ABCDE1234F ABCDE1234F 256 -- plain.pdf tests/fixtures/sample-cas.pdf
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Consolidated Account Statement</title>
+<style>
+  @page { size: A4; margin: 14mm; }
+  body { font: 9pt Helvetica, Arial, sans-serif; color: #000; }
+  h1 { font-size: 13pt; margin: 0 0 2mm; }
+  p { margin: 0 0 1.6mm; white-space: nowrap; }
+  .amc { font-weight: bold; font-size: 10pt; margin-top: 5mm; }
+  .scheme { font-weight: bold; white-space: normal; width: 120mm; }
+  table { border-collapse: collapse; margin: 1mm 0 2mm; }
+  td, th { padding: 0.6mm 4mm 0.6mm 0; text-align: left; font-weight: normal; }
+  td.n { text-align: right; }
+  .gap { margin-left: 10mm; }
+  .break { page-break-before: always; }
+</style>
+</head>
+<body>
+<h1>Consolidated Account Statement</h1>
+<p>01-Apr-2026 To 26-Oct-2026</p>
+<p>Email Id: investor@example.com</p>
+<p>A. N. Investor, 12 Example Road, Pune 411001</p>
+
+<p class="amc">HDFC Mutual Fund</p>
+<p>Folio No: 12345678 / 90<span class="gap">KYC: OK</span><span class="gap">PAN: OK</span></p>
+<p class="scheme">B205-HDFC Flexi Cap Fund - Direct Plan - Growth (Non-Demat) - ISIN: INF179K01UT0(Advisor: DIRECT) Registrar : CAMS</p>
+<p>Nominee 1: B. Investor</p>
+<p>Opening Unit Balance: 100.000</p>
+<table>
+  <tr><th>Date</th><th>Transaction</th><th>Amount (INR)</th><th>Units</th><th>Price (INR)</th><th>Unit Balance</th></tr>
+  <tr><td>05-May-2026</td><td>Purchase - SIP</td><td class="n">5,000.00</td><td class="n">2.611</td><td class="n">1,915.123</td><td class="n">102.611</td></tr>
+  <tr><td>05-Jun-2026</td><td>Purchase - SIP</td><td class="n">5,000.00</td><td class="n">2.518</td><td class="n">1,985.567</td><td class="n">105.129</td></tr>
+  <tr><td>06-Jul-2026</td><td>Purchase - SIP</td><td class="n">15,000.00</td><td class="n">7.216</td><td class="n">2,078.712</td><td class="n">112.345</td></tr>
+</table>
+<p>Closing Unit Balance: 112.345<span class="gap">NAV on 26-Oct-2026: INR 2,143.156</span><span class="gap">Total Cost Value: 2,10,000.00</span></p>
+<p>Market Value on 26-Oct-2026: INR 2,40,770.54</p>
+
+<p class="amc">PPFAS Mutual Fund</p>
+<p>Folio No: 9876543<span class="gap">KYC: OK</span><span class="gap">PAN: OK</span></p>
+<p class="scheme">PP001ZG-Parag Parikh Flexi Cap Fund - Direct Plan - Growth (Non-Demat) - ISIN: INF879O01027(Advisor: DIRECT) Registrar : KFINTECH</p>
+<p>Opening Unit Balance: 1,000.000</p>
+<table>
+  <tr><th>Date</th><th>Transaction</th><th>Amount (INR)</th><th>Units</th><th>Price (INR)</th><th>Unit Balance</th></tr>
+  <tr><td>12-Jul-2026</td><td>Purchase</td><td class="n">10,000.00</td><td class="n">114.155</td><td class="n">87.6000</td><td class="n">1,114.155</td></tr>
+</table>
+<p class="break">Date<span class="gap">Transaction</span><span class="gap">Amount (INR)</span><span class="gap">Units</span></p>
+<table>
+  <tr><td>14-Aug-2026</td><td>Purchase</td><td class="n">10,000.00</td><td class="n">112.233</td><td class="n">89.1000</td><td class="n">1,226.388</td></tr>
+</table>
+<p>Closing Unit Balance: 1,226.388<span class="gap">NAV on 26-Oct-2026: INR 89.3000</span><span class="gap">Total Cost Value: 85,000.00</span></p>
+<p>Market Value on 26-Oct-2026: INR 1,09,516.45</p>
+
+<p class="amc">Nippon India Mutual Fund</p>
+<p>Folio No: 4040404040<span class="gap">KYC: OK</span><span class="gap">PAN: OK</span></p>
+<p class="scheme">RMFSCDG-Nippon India Small Cap Fund - Direct Plan Growth Plan - Growth Option - ISIN: INF204K01K15(Advisor: DIRECT) Registrar : KFINTECH</p>
+<p>Opening Unit Balance: 250.000</p>
+<table>
+  <tr><td>02-Sep-2026</td><td>Redemption</td><td class="n">-48,000.00</td><td class="n">-250.000</td><td class="n">192.0000</td><td class="n">0.000</td></tr>
+</table>
+<p>Closing Unit Balance: 0.000<span class="gap">NAV on 26-Oct-2026: INR 190.9855</span><span class="gap">Total Cost Value: 0.00</span></p>
+<p>Market Value on 26-Oct-2026: INR 0.00</p>
+
+<p class="amc">Example Mutual Fund</p>
+<p>Folio No: 55555<span class="gap">KYC: OK</span><span class="gap">PAN: OK</span></p>
+<p class="scheme">EX12-Example Arbitrage Fund - Direct Growth - ISIN: INF000X01234(Advisor: DIRECT) Registrar : CAMS</p>
+<p>Opening Unit Balance: 10.000</p>
+<p>Closing Unit Balance: 10.000<span class="gap">NAV on 26-Oct-2026: INR 15.50</span><span class="gap">Total Cost Value: 140.00</span></p>
+<p>Market Value on 26-Oct-2026: INR 155.00</p>
+</body>
+</html>

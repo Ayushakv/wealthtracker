@@ -3,6 +3,7 @@ import { CATEGORIES, Category, categoryInfo } from '../core/categories.js';
 import { formatDate, inr, inrCompact, number, percent, plainNumber } from '../core/format.js';
 import { html } from '../ui/html.js';
 import { icon } from '../ui/icons.js';
+import { importCAS } from './casImport.js';
 import { emptyState, pageHead, signClass } from './common.js';
 
 /** Category filter survives navigating into an asset and back. */
@@ -49,6 +50,7 @@ function addMenu() {
     <summary class="btn btn-primary" aria-label="Add Asset">${icon('plus')}<span class="hide-narrow">Add Asset</span></summary>
     <div class="menu-items" role="menu">
       ${CATEGORIES.map((c) => html`<a role="menuitem" href="#/new/${c.slug}">${icon(c.icon)}<span>${c.raw}</span></a>`)}
+      <a role="menuitem" href="#/assets" class="menu-sep" data-action="import-cas">${icon('import')}<span>Import Mutual Funds from CAS</span></a>
     </div>
   </details>`;
 }
@@ -100,6 +102,13 @@ export const assetsView = {
     };
     document.addEventListener('click', close);
     return () => document.removeEventListener('click', close);
+  },
+
+  actions: {
+    'import-cas'(el, ctx) {
+      el.closest('details').open = false;
+      return importCAS(ctx);
+    },
   },
 
   changes: {
