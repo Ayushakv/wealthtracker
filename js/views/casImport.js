@@ -8,9 +8,11 @@ import { html } from '../ui/html.js';
 import { icon } from '../ui/icons.js';
 import { pdfRows, PDFPasswordError } from '../ui/pdf.js';
 import { latestNAVs } from '../core/mfapi.js';
+import { isNPSStatement } from '../core/nps.js';
+import { importNPS } from './npsImport.js';
 
 export const CAS_HELP =
-  'Mutual funds: request a Detailed Consolidated Account Statement on camsonline.com or kfintech.com; it arrives by email as a PDF locked with the password you choose. Bonds, SGBs, NCDs and funds in a demat account: use the monthly NSDL or CDSL CAS emailed to you (usually locked with your PAN). The PDF is read on this device and never uploaded.';
+  'Mutual funds: request a Detailed Consolidated Account Statement on camsonline.com or kfintech.com; it arrives by email as a PDF locked with the password you choose. Bonds, SGBs, NCDs and funds in a demat account: use the monthly NSDL or CDSL CAS emailed to you (usually locked with your PAN). NPS: download the Transaction Statement for your tier from the CRA site (Protean). The PDF is read on this device and never uploaded.';
 
 /** ISIN → AMFI scheme code, bundled so no scheme list is fetched. Without it, funds keep the statement's NAV. */
 async function loadSchemeMap() {
@@ -294,7 +296,10 @@ async function importDemat(pdf, { store, navigate }) {
   if (picked.some((r) => fundRows.includes(r))) await store.refresh();
 }
 
-/** Picks a CAS PDF (CAMS/KFintech for funds, NSDL/CDSL for bonds and demat funds), previews what changes, and saves. */
+/**
+ * Picks a statement PDF (CAMS/KFintech CAS for funds, NSDL/CDSL CAS for bonds and demat funds, or an NPS transaction
+ * statement), previews what changes, and saves.
+ */
 export async function importCAS({ store, navigate }) {
   const file = await pickFile('.pdf,application/pdf');
   if (!file) return;
@@ -302,6 +307,10 @@ export async function importCAS({ store, navigate }) {
     const pdf = await readStatement(file);
     if (!pdf) return;
     const lines = pdf.map((r) => r.text);
+    if (isNPSStatement(lines)) {
+      await importNPS(pdf, { store, navigate });
+      return;
+    }
     if (isDepositoryStatement(lines)) {
       await importDemat(pdf, { store, navigate });
       return;

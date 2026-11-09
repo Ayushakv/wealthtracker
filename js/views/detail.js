@@ -36,7 +36,7 @@ function categoryDetails(a, store, now) {
 
     case Category.nps:
       return html`
-        ${group({ title: 'Account' }, [opt('PRAN', a.pran), row('Tier', a.npsTier ?? 'Tier 1'), opt('Units', a.unitsHeld, (v) => number(v, 4))])}
+        ${group({ title: 'Account' }, [opt('PRAN', a.pran), row('Tier', a.npsTier ?? 'Tier 1'), opt('Units', a.unitsHeld, (v) => number(v, 4)), opt('Valued on', a.navDate, formatDate)])}
         ${group({ title: 'Asset split' }, [
           splitRow('Equity (E)', a.npsEquityPct),
           splitRow('Corporate debt (C)', a.npsCorporateDebtPct),

@@ -380,6 +380,25 @@ try {
   await shot('assets-expanded', { full: true });
   await go('#/assets');
 
+  step('Import an NPS statement: updates the NPS account with its PRAN');
+  await click('details.menu > summary');
+  await chooseFile('[data-action="import-nps"]', fileURLToPath(new URL('../tests/fixtures/sample-nps.pdf', import.meta.url)));
+  await waitFor(`document.querySelector('dialog[open] .cas-list')`, 'NPS review dialog', 15_000);
+  assert((await text('dialog h2')) === 'Update NPS Account', `NPS review title (${await text('dialog h2')})`);
+  const npsReview = await evaluate(reviewRows);
+  assert(npsReview.length === 5 && npsReview[1].includes('Scheme E · Equity') && npsReview[1].includes('4,250.1234 units'), `schemes listed (${JSON.stringify(npsReview)})`);
+  assert(npsReview[0].includes('NPS Tier 1') && npsReview[0].includes('₹5,36,800 →') && npsReview[0].includes('₹4,87,006') && npsReview[0].includes('Update'), `seed NPS updated first (${npsReview[0]})`);
+  assert((await text('dialog form')).includes('The schemes add up to'), 'scheme total checked');
+  await shot('nps-review', { full: true });
+  await click('dialog [data-ok]');
+  await waitFor(`document.querySelector('#toast.show')?.textContent.includes('Updated NPS Tier 1 to ₹4,87,006')`, 'NPS import toast');
+  await waitFor(`location.hash.startsWith('#/asset/') && document.querySelector('h1')?.textContent.includes('NPS Tier 1')`, 'NPS detail');
+  const npsDetail = await text('main');
+  assert(npsDetail.includes('₹4,20,000') && npsDetail.includes('65.7%') && npsDetail.includes('1.3%') && npsDetail.includes('8,150.6234') && npsDetail.includes('31 Oct 2026'), `NPS value, split, units and date (${npsDetail})`);
+  await shot('nps-detail', { full: true });
+  await go('#/assets');
+  await waitFor(`${ROWS} === ${assetCount + 17}`, 'no NPS duplicate');
+
   step('Turn on passcode → data encrypted at rest');
   await go('#/settings');
   await waitFor(`document.querySelector('[data-action="set-passcode"]')`, 'settings');

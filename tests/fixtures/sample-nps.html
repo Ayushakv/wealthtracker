@@ -1,0 +1,82 @@
+<!doctype html>
+<!--
+  Synthetic NPS Transaction Statement (made-up subscriber, PRAN and holdings) in the Protean CRA layout, used by the
+  PDF tests and the end-to-end test. Rebuild sample-nps.pdf with:
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless --no-pdf-header-footer \
+      --print-to-pdf=tests/fixtures/sample-nps.pdf tests/fixtures/sample-nps.html
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>NPS Transaction Statement</title>
+<style>
+  @page { size: A4; margin: 14mm; }
+  body { font: 8pt Helvetica, Arial, sans-serif; color: #000; }
+  .top { text-align: right; }
+  h1 { font-size: 12pt; text-align: center; margin: 4mm 0; }
+  h2 { font-size: 10pt; text-align: center; margin: 5mm 0 1mm; }
+  p { margin: 0 0 1mm; }
+  table { border-collapse: collapse; margin: 1mm 0 2mm; width: 100%; }
+  td, th { padding: 0.8mm 2mm; text-align: left; font-weight: normal; vertical-align: top; }
+  .n { text-align: right; }
+  .c { text-align: center; }
+  table.summary th { width: 14%; text-align: center; vertical-align: middle; }
+  table.summary td { text-align: center; }
+  td.label { width: 28mm; font-weight: bold; }
+</style>
+</head>
+<body>
+<div class="top">
+  <p><b>NPS TRANSACTION STATEMENT</b></p>
+  <p>April 01, 2026 to October 31, 2026</p>
+  <p>Statement Generation Date : October 31, 2026 10:05 AM</p>
+</div>
+<h1>NPS Transaction Statement for<br>Tier I Account</h1>
+
+<table>
+  <tr><td class="label">PRAN</td><td>110012345678</td><td class="label">Registration Date</td><td>15-Jan-20</td></tr>
+  <tr><td class="label">Subscriber Name</td><td>A N SUBSCRIBER</td><td class="label">Tier I Status</td><td>Active</td></tr>
+  <tr><td class="label">Address</td><td>12 EXAMPLE ROAD, PUNE 411001</td><td class="label">POP Name</td><td>eNPS - Online</td></tr>
+</table>
+
+<h2>Current Scheme Preference</h2>
+<table>
+  <tr><td>Scheme 1</td><td>NPS TRUST A/C EXAMPLE PENSION FUND SCHEME E - TIER I</td><td class="n">65.00%</td></tr>
+  <tr><td>Scheme 2</td><td>NPS TRUST A/C EXAMPLE PENSION FUND SCHEME C - TIER I</td><td class="n">20.00%</td></tr>
+  <tr><td>Scheme 3</td><td>NPS TRUST A/C EXAMPLE PENSION FUND SCHEME G - TIER I</td><td class="n">13.00%</td></tr>
+  <tr><td>Scheme 4</td><td>NPS TRUST A/C EXAMPLE PENSION FUND SCHEME A - TIER I</td><td class="n">2.00%</td></tr>
+</table>
+
+<h2>Investment Summary</h2>
+<table class="summary">
+  <tr>
+    <th>Value of your Holdings (Investments) as on October 31, 2026 (in ₹)</th>
+    <th>No of Contributions</th>
+    <th>Total Contribution in your account as on October 31, 2026 (in ₹)</th>
+    <th>Total Withdrawal as on October 31, 2026 (in ₹)</th>
+    <th>Total Notional Gain/Loss as on October 31, 2026 (in ₹)</th>
+    <th>Withdrawal/ deduction in units towards intermediary charges (in ₹)</th>
+  </tr>
+  <tr><td>(A)</td><td></td><td>(B)</td><td>(C)</td><td>D=(A-B)+C</td><td>E</td></tr>
+  <tr><td>₹ 4,87,005.84</td><td>24</td><td>₹ 4,20,000.00</td><td>₹ 0.00</td><td>₹ 67,005.84</td><td>₹ 250.75</td></tr>
+</table>
+
+<h2>Investment Details - Scheme Wise Summary</h2>
+<table>
+  <tr><th>Particulars</th><th class="n">Scheme wise Value of your Holdings (Investments) (in ₹) (E=U*N)</th><th class="n">Total Units (U)</th><th class="n">NAV as on 31-Oct-2026 (N)</th></tr>
+  <tr><td>NPS TRUST A/C EXAMPLE PENSION FUND SCHEME E - TIER I</td><td class="n">3,19,821.79</td><td class="n">4,250.1234</td><td class="n">75.2500</td></tr>
+  <tr><td>NPS TRUST A/C EXAMPLE PENSION FUND SCHEME C - TIER I</td><td class="n">1,01,034.05</td><td class="n">2,100.5000</td><td class="n">48.1000</td></tr>
+  <tr><td>NPS TRUST A/C EXAMPLE PENSION FUND SCHEME G - TIER I</td><td class="n">60,000.00</td><td class="n">1,500.0000</td><td class="n">40.0000</td></tr>
+  <tr><td>NPS TRUST A/C EXAMPLE PENSION FUND SCHEME A - TIER I</td><td class="n">6,150.00</td><td class="n">300.0000</td><td class="n">20.5000</td></tr>
+</table>
+
+<h2>Transaction Details</h2>
+<p class="c">NPS TRUST A/C EXAMPLE PENSION FUND SCHEME E - TIER I</p>
+<table>
+  <tr><td>01-Apr-2026</td><td>Opening balance</td><td></td><td></td><td class="n">3,800.0000</td></tr>
+  <tr><td>01-Sep-2026</td><td>By Voluntary Contributions</td><td class="n">33,000.00</td><td class="n">73.3333</td><td class="n">450.1234</td></tr>
+  <tr><td>31-Oct-2026</td><td>Closing Balance</td><td></td><td></td><td class="n">4,250.1234</td></tr>
+</table>
+<p>This is computer generated statement. For more details, please refer circulars available on Protean CRA website.</p>
+</body>
+</html>

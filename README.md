@@ -12,9 +12,9 @@ Tracks bank accounts, real estate, mutual funds (live NAVs from mfapi.in), PPF (
 - **CAS import** reads the PDF in the browser; the file and its password never leave the device.
 - **Backups:** Settings → Export Backup saves a plain JSON file. It's the same format as the earlier iPhone app, so old backups import directly. Importing merges by asset ID, so importing the same file twice doesn't create duplicates.
 
-## Import from your CAS
+## Import from your statements
 
-Assets → **+** → **Import Mutual Funds or Bonds from CAS** (also in Settings). It tells the two kinds of statement apart by itself.
+Assets → **+** → **Import Mutual Funds or Bonds from CAS** or **Import NPS Statement** (both also in Settings). Either one tells the kinds of statement apart by itself.
 
 ### Mutual funds (CAMS + KFintech)
 
@@ -34,7 +34,14 @@ The NSDL or CDSL CAS, emailed monthly to anyone with a demat account, lists sove
 - Re-imports match by ISIN + demat account. Bonds you entered by hand have no ISIN, so the review lets you untick them to avoid duplicates.
 - Bank FDs aren't in any statement an app can read; they stay manual.
 
-Both parsers (`js/core/cas.js`, `js/core/demat.js`) were built from the published layouts and synthetic statements, not real ones. If a real statement imports wrongly, adjust the parser and add a test in `tests/cas.test.js` or `tests/demat.test.js`.
+### NPS (Protean CRA)
+
+Download the **Transaction Statement** for Tier I or Tier II from the Protean CRA site (any period ending today) and import the PDF. It sets the NPS asset's value, total contributed (less withdrawals), units, NAV date and E/C/G/A split from the statement's Investment Summary and Scheme Wise Summary.
+
+- It updates the NPS asset with the same PRAN and tier. If none has that PRAN but exactly one NPS asset of that tier has no PRAN (added by hand), that one is updated and takes the PRAN. Otherwise a new asset is added.
+- The asset split is what each scheme holds now, not your scheme preference.
+
+The parsers (`js/core/cas.js`, `js/core/demat.js`, `js/core/nps.js`) are tested on synthetic statements. If a real statement imports wrongly, adjust the parser and add a test in `tests/cas.test.js`, `tests/demat.test.js` or `tests/nps.test.js`.
 
 ## Run it locally
 
