@@ -1,7 +1,7 @@
 // Offline support: every app file is cached on install and served cache-first.
 // The PDF reader (vendor/) and ISIN map (data/) are large and only needed for CAS imports, so they are
 // cached the first time they are used instead. Bump VERSION whenever any of these files change.
-const VERSION = 'wt-v11';
+const VERSION = 'wt-v12';
 const LAZY = /\/(vendor|data)\//;
 
 const PRECACHE = [
@@ -27,6 +27,7 @@ const PRECACHE = [
   'js/core/ics.js',
   'js/core/mfapi.js',
   'js/core/nps.js',
+  'js/core/ppfStatement.js',
   'js/core/ppf.js',
   'js/store/crypto.js',
   'js/store/db.js',
@@ -44,6 +45,7 @@ const PRECACHE = [
   'js/views/form.js',
   'js/views/gate.js',
   'js/views/npsImport.js',
+  'js/views/ppfImport.js',
   'js/views/rates.js',
   'js/views/settings.js',
 ];

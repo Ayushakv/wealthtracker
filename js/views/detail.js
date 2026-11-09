@@ -102,6 +102,7 @@ function ppfSections(a, store, now) {
       row('Credited balance', inr(s.creditedBalance)),
       row('Interest accrued this FY', inr(s.accruedInterest)),
       row('Current rate', `${plainNumber(rates.currentRate(now))}% p.a.`),
+      a.accountNumber ? row('Account', a.accountNumber) : '',
     ])}
     ${[...s.years].reverse().map((y) =>
       group({ title: y.label + (y.isCredited ? '' : ' (in progress)') }, [

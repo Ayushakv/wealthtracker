@@ -41,7 +41,15 @@ Download the **Transaction Statement** for Tier I or Tier II from the Protean CR
 - It updates the NPS asset with the same PRAN and tier. If none has that PRAN but exactly one NPS asset of that tier has no PRAN (added by hand), that one is updated and takes the PRAN. Otherwise a new asset is added.
 - The asset split is what each scheme holds now, not your scheme preference.
 
-The parsers (`js/core/cas.js`, `js/core/demat.js`, `js/core/nps.js`) are tested on synthetic statements. If a real statement imports wrongly, adjust the parser and add a test in `tests/cas.test.js`, `tests/demat.test.js` or `tests/nps.test.js`.
+### PPF (bank statement)
+
+Download your PPF account statement from 1 April of the current financial year (Axis Bank's layout: "The current value of investment in your Public Provident Fund (PPF) account number … is INR …" followed by Transaction Date, Remarks, Amount and Balance) and import the PDF, as often as you like.
+
+- The balance on 1 April becomes the opening balance, and the statement's deposits and withdrawals replace the account's transactions. The bank's interest credits are left out: the app works out interest month by month at the official rate, so the value includes interest earned since 1 April that the bank credits on 31 March.
+- It updates the PPF asset with the same account number. If none has it but exactly one PPF asset has no account number (added by hand), that one is overwritten and takes the account number. Otherwise a new asset is added.
+- A statement that starts partway through a financial year is refused, since its opening balance wouldn't be the 1 April balance.
+
+The parsers (`js/core/cas.js`, `js/core/demat.js`, `js/core/nps.js`, `js/core/ppfStatement.js`) are tested on synthetic statements. If a real statement imports wrongly, adjust the parser and add a test in `tests/cas.test.js`, `tests/demat.test.js`, `tests/nps.test.js` or `tests/ppfStatement.test.js`.
 
 ## Run it locally
 

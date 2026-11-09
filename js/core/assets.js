@@ -42,6 +42,8 @@ export const FIELD_TYPES = Object.freeze({
   isPayout: 'boolean',
   ppfOpeningBalance: 'number',
   ppfOpeningFYStartYear: 'int',
+  /** The bank's account number, from an imported statement (PPF). */
+  accountNumber: 'string',
   p2pRepaymentsReceived: 'number',
   p2pWriteOffs: 'number',
   policyType: 'string',

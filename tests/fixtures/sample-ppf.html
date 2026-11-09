@@ -1,0 +1,46 @@
+<!doctype html>
+<!--
+  Synthetic PPF account statement (made-up holder, bank and account) in the layout Axis Bank uses, for the PDF tests
+  and the end-to-end test. Rebuild sample-ppf.pdf with:
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless --no-pdf-header-footer \
+      --print-to-pdf=tests/fixtures/sample-ppf.pdf tests/fixtures/sample-ppf.html
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PPF Statement</title>
+<style>
+  @page { size: A4; margin: 18mm; }
+  body { font: 9pt Helvetica, Arial, sans-serif; color: #000; }
+  p { margin: 0 0 2.5mm; }
+  .addr p { margin: 0; }
+  table { border-collapse: collapse; margin: 3mm 0 5mm; width: 100%; }
+  td, th { border: 0.5pt solid #000; padding: 1.2mm 3mm; text-align: left; }
+  th { text-align: center; }
+  .small { font-size: 7pt; text-align: center; }
+</style>
+</head>
+<body>
+<p>31-10-2026</p>
+<div class="addr">
+  <p><b>A N SUBSCRIBER</b></p>
+  <p>12 EXAMPLE ROAD</p>
+  <p>PUNE 411001</p>
+</div>
+<p>&nbsp;</p>
+<p>Dear A N SUBSCRIBER,</p>
+<p>Thank you for banking with us.</p>
+<p>The current value of investment in your Public Provident Fund (PPF) account number 9999PPF0000000001234 is INR 250000.00.</p>
+<p>Please find the statement of transaction for your PPF account from 01-04-2026 to 31-03-2027 below:</p>
+<table>
+  <tr><th>Transaction Date</th><th>Remarks</th><th>Amount (INR)</th><th>Balance (INR)</th></tr>
+  <tr><td>04-10-2026</td><td>Deposit</td><td>25000.00</td><td>250000.00</td></tr>
+  <tr><td>03-07-2026</td><td>Deposit</td><td>25000.00</td><td>225000.00</td></tr>
+  <tr><td>05-04-2026</td><td>Deposit</td><td>50000.00</td><td>200000.00</td></tr>
+</table>
+<p>Kindly note that investment in PPF is eligible for income tax deduction under section 80C.</p>
+<p>Regards,</p>
+<p>Example Bank Ltd.</p>
+<p class="small">This is a system-generated communication and does not require a signature.</p>
+</body>
+</html>

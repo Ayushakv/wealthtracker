@@ -85,7 +85,8 @@ function addMenu() {
     <summary class="btn btn-primary" aria-label="Add Asset">${icon('plus')}<span class="hide-narrow">Add Asset</span></summary>
     <div class="menu-items" role="menu">
       <a role="menuitem" href="#/assets" data-action="import-cas">${icon('import')}<span>Import Mutual Funds or Bonds from CAS</span></a>
-      <a role="menuitem" href="#/assets" class="menu-sep-after" data-action="import-nps">${icon('import')}<span>Import NPS Statement</span></a>
+      <a role="menuitem" href="#/assets" data-action="import-nps">${icon('import')}<span>Import NPS Statement</span></a>
+      <a role="menuitem" href="#/assets" class="menu-sep-after" data-action="import-ppf">${icon('import')}<span>Import PPF Statement</span></a>
       ${CATEGORIES.map((c) => html`<a role="menuitem" href="#/new/${c.slug}">${icon(c.icon)}<span>${c.raw}</span></a>`)}
     </div>
   </details>`;
@@ -153,6 +154,10 @@ export const assetsView = {
     },
     // The same reader: it tells the statements apart by their contents.
     'import-nps'(el, ctx) {
+      el.closest('details').open = false;
+      return importCAS(ctx);
+    },
+    'import-ppf'(el, ctx) {
       el.closest('details').open = false;
       return importCAS(ctx);
     },

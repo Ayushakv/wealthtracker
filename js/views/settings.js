@@ -65,6 +65,7 @@ export const settingsView = {
       ${group({ title: 'Statements', foot: CAS_HELP }, [
         button('import-cas', 'import', 'Import Mutual Funds or Bonds from CAS (PDF)'),
         button('import-nps', 'import', 'Import NPS Statement (PDF)'),
+        button('import-ppf', 'import', 'Import PPF Statement (PDF)'),
       ])}
       ${group({ title: 'Interest Rates' }, html`<a class="row row-link" href="#/settings/rates"><span class="row-label">PPF rate history</span><span class="row-value">${plainNumber(store.rates.currentRate())}% now ${icon('chevron', 'chev')}</span></a>`)}
       ${group(
@@ -116,6 +117,7 @@ export const settingsView = {
 
     'import-cas': (_, ctx) => importCAS(ctx),
     'import-nps': (_, ctx) => importCAS(ctx),
+    'import-ppf': (_, ctx) => importCAS(ctx),
 
     async 'all-to-calendar'(_, { store }) {
       const policies = store.assets.filter((a) => a.category === Category.insurance && a.policyRenewalDate != null);

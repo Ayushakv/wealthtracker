@@ -403,6 +403,25 @@ try {
   await go('#/assets');
   await waitFor(`${ROWS} === ${assetCount + 17}`, 'no NPS duplicate');
 
+  step('Import a PPF statement: replaces the deposits entered by hand');
+  await click('details.menu > summary');
+  await chooseFile('[data-action="import-ppf"]', fileURLToPath(new URL('../tests/fixtures/sample-ppf.pdf', import.meta.url)));
+  await waitFor(`document.querySelector('dialog[open] .cas-list')`, 'PPF review dialog', 15_000);
+  assert((await text('dialog h2')) === 'Update PPF Account', `PPF review title (${await text('dialog h2')})`);
+  const ppfReview = await evaluate(reviewRows);
+  assert(ppfReview.length === 4 && ppfReview[0].includes('PPF — renamed') && ppfReview[0].includes('Balance ₹2,50,000') && ppfReview[0].includes('Opening ₹1,50,000'), `seed PPF updated (${JSON.stringify(ppfReview)})`);
+  assert(ppfReview[1].includes('4 Oct 2026') && ppfReview[3].includes('5 Apr 2026') && ppfReview[3].includes('Balance ₹2,00,000'), `transactions newest first (${JSON.stringify(ppfReview)})`);
+  assert((await text('dialog form')).includes('Replaces the opening balance and deposits you entered by hand'), 'adopting the hand-added PPF explained');
+  await shot('ppf-review', { full: true });
+  await click('dialog [data-ok]');
+  await waitFor(`document.querySelector('#toast.show')?.textContent.includes('Updated PPF — renamed')`, 'PPF import toast');
+  await waitFor(`location.hash === '${ppfHref}'`, 'PPF detail');
+  const ppfDetail = await text('main');
+  assert(ppfDetail.includes('9999PPF0000000001234') && ppfDetail.includes('₹1,50,000') && ppfDetail.includes('3 Jul 2026') && !ppfDetail.includes('Monthly SI'), `statement's account, opening and deposits (${ppfDetail})`);
+  await shot('ppf-imported', { full: true });
+  await go('#/assets');
+  await waitFor(`${ROWS} === ${assetCount + 17}`, 'no PPF duplicate');
+
   step('Turn on passcode → data encrypted at rest');
   await go('#/settings');
   await waitFor(`document.querySelector('[data-action="set-passcode"]')`, 'settings');
