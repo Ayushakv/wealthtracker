@@ -147,6 +147,22 @@ describe('Asset form rules', () => {
     assert.equal(validateDraft({ ...newDraft(Category.mutualFund, now), name: 'X', amfiCode: '1', unitsHeld: 0 }), 'Enter units held.');
     assert.equal(validateDraft({ ...newDraft(Category.nps, now), name: 'X', npsEquityPct: 60, npsGovtBondPct: 30 }), 'E/C/G/A split must add up to 100%.');
     assert.equal(validateDraft({ ...newDraft(Category.bonds, now), name: 'X', investedAmount: 1000, interestRate: 7 }), null);
+    assert.equal(validateDraft({ ...newDraft(Category.fd, now), name: 'X', investedAmount: 1000 }), 'Enter the interest rate.');
+  });
+
+  test('fixed deposits are valued from their interest, and can be switched to a bond', () => {
+    const fd = applyDraft(
+      { ...newDraft(Category.fd, now), name: 'Bank FD', investedAmount: 100000, interestRate: 7, startDate: addMonths(now, -12) },
+      null,
+      RateSchedule.official,
+      now,
+    );
+    assert.equal(fd.category, Category.fd);
+    assert.ok(fd.currentValuation > 107000 && fd.currentValuation < 107300, `a year of quarterly interest (${fd.currentValuation})`);
+    const draft = draftFromAsset(fd, now);
+    draft.category = Category.bonds;
+    assert.equal(applyDraft(draft, fd, RateSchedule.official, now).category, Category.bonds);
+    assert.equal(fd.interestRate, 7);
   });
 
   test('bank balance is also the invested amount', () => {

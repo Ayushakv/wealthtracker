@@ -1,10 +1,11 @@
-// Raw values match the iOS app's enums so backups are interchangeable.
+// Raw values are what the vault and backups store; renaming one needs an upgrade path (see upgradeCategory).
 
 export const Category = Object.freeze({
   bank: 'Bank Accounts',
   realEstate: 'Real Estate & Land',
   mutualFund: 'Mutual Funds',
-  bonds: 'Bonds & FDs',
+  bonds: 'Bonds',
+  fd: 'Fixed Deposits',
   p2p: 'P2P Lending (LenDenClub)',
   ppf: 'Public Provident Fund (PPF)',
   nps: 'National Pension System (NPS)',
@@ -25,7 +26,8 @@ export const CATEGORIES = [
   { raw: Category.bank, slug: 'bank', short: 'Bank', icon: 'bank', bucket: Bucket.liquidCash },
   { raw: Category.realEstate, slug: 'real-estate', short: 'Land', icon: 'map', bucket: Bucket.realEstate },
   { raw: Category.mutualFund, slug: 'mutual-fund', short: 'Mutual Funds', icon: 'trend', bucket: Bucket.market },
-  { raw: Category.bonds, slug: 'bonds', short: 'Bonds & FDs', icon: 'doc', bucket: Bucket.sovereignDebt },
+  { raw: Category.fd, slug: 'fd', short: 'FDs', icon: 'safe', bucket: Bucket.sovereignDebt },
+  { raw: Category.bonds, slug: 'bonds', short: 'Bonds', icon: 'doc', bucket: Bucket.sovereignDebt },
   { raw: Category.p2p, slug: 'p2p', short: 'P2P', icon: 'people', bucket: Bucket.p2p },
   { raw: Category.ppf, slug: 'ppf', short: 'PPF', icon: 'shield', bucket: Bucket.sovereignDebt },
   { raw: Category.nps, slug: 'nps', short: 'NPS', icon: 'pension', bucket: Bucket.market },
@@ -44,11 +46,29 @@ export function isKnownCategory(raw) {
   return byRaw.has(raw);
 }
 
+/** Bonds and fixed deposits share the interest-based valuation, form and details. */
+export const isFixedIncome = (raw) => raw === Category.bonds || raw === Category.fd;
+
+/** The single category bonds and FDs shared before they were split. */
+export const LEGACY_BONDS_AND_FDS = 'Bonds & FDs';
+const BOND_NAME_RE = /\b(bonds?|ncds?|debentures?|sgbs?|g-?secs?|gilts?|t-?bills?|sdls?|securiti[sz]ed)\b/i;
+
+/**
+ * Moves an asset saved under the old combined category to Bonds or Fixed Deposits, in place: anything held in a demat
+ * account (an ISIN) or named like a bond is a bond, the rest were deposits added by hand.
+ * @returns whether the asset changed
+ */
+export function upgradeCategory(a) {
+  if (a.category !== LEGACY_BONDS_AND_FDS) return false;
+  a.category = a.isin || a.instrument || BOND_NAME_RE.test(a.name ?? '') ? Category.bonds : Category.fd;
+  return true;
+}
+
 /** Dashboard slices. `series` is a fixed palette slot so a bucket keeps its color when others are empty. */
 export const BUCKETS = [
   { key: Bucket.realEstate, label: 'Real Estate', series: 1 },
   { key: Bucket.market, label: 'Market (MF + NPS)', series: 2 },
-  { key: Bucket.sovereignDebt, label: 'Sovereign Debt (PPF + Bonds)', series: 3 },
+  { key: Bucket.sovereignDebt, label: 'Sovereign Debt (PPF, Bonds, FDs)', series: 3 },
   { key: Bucket.p2p, label: 'P2P (LenDenClub)', series: 4 },
   { key: Bucket.liquidCash, label: 'Liquid Cash', series: 5 },
   { key: Bucket.insurance, label: 'LIC Surrender Value', series: 6 },

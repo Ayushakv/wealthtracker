@@ -1,6 +1,6 @@
 import { FIELD_TYPES, REQUIRED_FIELDS, newID } from './assets.js';
 import { toInputValue } from './calendar.js';
-import { Category, isKnownCategory } from './categories.js';
+import { Category, isKnownCategory, upgradeCategory } from './categories.js';
 
 /**
  * Versioned, plain-JSON snapshot in the same format as the iOS app's BackupFile.
@@ -82,6 +82,7 @@ function decodeAsset(record, index) {
     if (a[key] === undefined) throw new BackupError(`Asset ${index + 1} is missing “${key}”.`);
   }
   a.id = a.id.toUpperCase();
+  upgradeCategory(a);
   if (!isKnownCategory(a.category)) a.category = Category.bank;
   const entries = Array.isArray(record.entries) ? record.entries : [];
   a.entries = entries

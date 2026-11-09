@@ -44,11 +44,12 @@ function categoryDetails(a, store, now) {
           splitRow('Alternative (A)', a.npsAlternativePct),
         ])}`;
 
-    case Category.bonds: {
+    case Category.bonds:
+    case Category.fd: {
       const v = fixedIncomeFor(a, now);
       const holding = [opt('Type', a.instrument), opt('Demat account', a.folio), opt('ISIN', a.isin)];
       if (!v) {
-        return group({ title: 'Bond', foot: 'Valued at the current value you entered or imported. Edit it to update, or turn on interest calculation.' }, [
+        return group({ title: a.category === Category.fd ? 'Deposit' : 'Bond', foot: 'Valued at the current value you entered or imported. Edit it to update, or turn on interest calculation.' }, [
           opt('Coupon', a.interestRate, (r) => `${plainNumber(r)}%`),
           opt('Maturity', a.maturityDate, formatDate),
           holding,

@@ -44,7 +44,7 @@ export function samplePortfolio(rates, now = Date.now()) {
   });
 
   const fd = make({
-    name: 'HDFC Bank FD', category: Category.bonds, investedAmount: 200_000, currentValuation: 200_000,
+    name: 'HDFC Bank FD', category: Category.fd, investedAmount: 200_000, currentValuation: 200_000,
     institution: 'HDFC Bank', interestRate: 7.25, compounding: 'Quarterly', isPayout: false,
     startDate: monthsAgo(10), maturityDate: addMonths(now, 14),
   });

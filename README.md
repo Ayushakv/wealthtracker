@@ -2,7 +2,7 @@
 
 A private, local-first net-worth tracker for Indian portfolios. It's a website you can install on your phone's Home Screen like an app. Plain HTML, CSS and JavaScript, with no dependencies and no build step.
 
-Tracks bank accounts, real estate, mutual funds (live NAVs from mfapi.in), PPF (month-wise interest using the official rate history), NPS, bonds and FDs, P2P (LenDenClub) and insurance (LIC surrender value; health and term cover are tracked but don't count towards net worth).
+Tracks bank accounts, real estate, mutual funds (live NAVs from mfapi.in), PPF (month-wise interest using the official rate history), NPS, bonds, fixed deposits, P2P (LenDenClub) and insurance (LIC surrender value; health and term cover are tracked but don't count towards net worth).
 
 ## Where your data lives
 
@@ -27,12 +27,12 @@ How it matches: a fund imported before is matched by ISIN + folio, so re-importi
 
 ### Bonds in a demat account (NSDL or CDSL)
 
-The NSDL or CDSL CAS, emailed monthly to anyone with a demat account, lists sovereign gold bonds, government securities and corporate bonds/NCDs with their market value. Each bond becomes a Bonds & FDs asset valued at that market value, with the coupon and maturity when the statement shows them. Shares and fund units in the same statement are skipped; mutual funds come from the CAMS/KFintech statement.
+The NSDL or CDSL CAS, emailed monthly to anyone with a demat account, lists sovereign gold bonds, government securities and corporate bonds/NCDs with their market value. Each bond becomes a Bonds asset valued at that market value, with the coupon and maturity when the statement shows them. Shares and fund units in the same statement are skipped; mutual funds come from the CAMS/KFintech statement.
 
 - The statement has no purchase price, so the principal starts at the market value. Edit it to see your gain.
 - These bonds have **Calculate value from interest** turned off. Re-importing a newer statement updates their value. Turn it on (with a start date) to calculate accrued interest the way FDs do.
 - Re-imports match by ISIN + demat account. Bonds you entered by hand have no ISIN, so the review lets you untick them to avoid duplicates.
-- Bank FDs aren't in any statement an app can read; they stay manual.
+- Bank FDs aren't in any statement an app can read; add them by hand under **Fixed Deposits**. Entries saved under the old combined Bonds & FDs category move to Bonds when they have an ISIN or a bond-like name, and to Fixed Deposits otherwise; switch one with **Kind** in its edit form.
 
 ### NPS (Protean CRA)
 

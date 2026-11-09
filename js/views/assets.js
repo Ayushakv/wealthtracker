@@ -23,6 +23,7 @@ export function assetSubtitle(a) {
     case Category.insurance:
       return join(a.policyType, a.policyRenewalDate != null && `Renews ${formatDate(a.policyRenewalDate)}`);
     case Category.bonds:
+    case Category.fd:
       return join(a.interestRate != null && `${plainNumber(a.interestRate)}%`, a.maturityDate != null && `Matures ${formatDate(a.maturityDate)}`);
     case Category.nps:
       return join(a.npsTier ?? 'Tier 1', a.pran && `PRAN ${a.pran}`);

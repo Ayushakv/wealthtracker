@@ -1,5 +1,5 @@
 import { addDays, financialYearStart, startOfDay } from './calendar.js';
-import { BUCKETS, Category, categoryInfo, DEFAULT_COMPOUNDING, hasSurrenderValue } from './categories.js';
+import { BUCKETS, Category, categoryInfo, DEFAULT_COMPOUNDING, hasSurrenderValue, isFixedIncome } from './categories.js';
 import { fixedIncomeValuation } from './fixedIncome.js';
 import { ppfStatement, RateSchedule } from './ppf.js';
 
@@ -82,7 +82,7 @@ export function ppfStatementFor(a, rates = RateSchedule.official, asOf = Date.no
 }
 
 export function fixedIncomeFor(a, asOf = Date.now()) {
-  if (a.category !== Category.bonds || a.startDate == null) return null;
+  if (!isFixedIncome(a.category) || a.startDate == null) return null;
   return fixedIncomeValuation({
     principal: a.investedAmount,
     annualRatePercent: a.interestRate ?? 0,
@@ -103,7 +103,8 @@ export function recompute(a, rates = RateSchedule.official, now = Date.now()) {
       a.currentValuation = s.valuation;
       break;
     }
-    case Category.bonds: {
+    case Category.bonds:
+    case Category.fd: {
       const v = fixedIncomeFor(a, now);
       if (!v) return a;
       a.currentValuation = v.currentValue;

@@ -47,6 +47,15 @@ describe('Backup compatibility with the iOS app', () => {
     assert.equal(odd.id, 'AAAAAAAA-0000-0000-0000-000000000000');
   });
 
+  test('the old combined Bonds & FDs category becomes Bonds or Fixed Deposits', () => {
+    const old = (name, extra = {}) => ({ id: name, name, category: 'Bonds & FDs', currentValuation: 1, investedAmount: 1, lastUpdated: '2026-10-18T06:12:45Z', ...extra });
+    const { assets } = parseBackup(JSON.stringify({
+      version: 2,
+      assets: [old('HDFC Bank FD'), old('Post office deposit'), old('Imported', { isin: 'IN0020200195' }), old('RBI Floating Rate Bond'), old('XYZ NCD 2028')],
+    }));
+    assert.deepEqual(assets.map((a) => a.category), ['Fixed Deposits', 'Fixed Deposits', 'Bonds', 'Bonds', 'Bonds']);
+  });
+
   test('exports dates without fractional seconds (Swift rejects them) and round-trips', () => {
     const assets = samplePortfolio(RateSchedule.official, now + 123);
     const text = exportBackup({ assets, ppfRates: OFFICIAL_HISTORY }, now + 456);

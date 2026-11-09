@@ -1,7 +1,7 @@
 import { amfiCodes, recompute } from '../core/assets.js';
 import { exportBackup, mergeBackup, parseBackup } from '../core/backup.js';
 import { quarterStart } from '../core/calendar.js';
-import { Category } from '../core/categories.js';
+import { Category, upgradeCategory } from '../core/categories.js';
 import { latestNAVs } from '../core/mfapi.js';
 import { OFFICIAL_HISTORY, RateSchedule } from '../core/ppf.js';
 import { decryptJSON, deriveKey, encryptJSON, MIN_PASSCODE_LENGTH, PBKDF2_ITERATIONS, randomBytes } from './crypto.js';
@@ -82,6 +82,8 @@ export class Store extends EventTarget {
     const { vault } = await getMany(this.#db, ['vault']);
     const v = vault ? (this.encrypted ? await decryptJSON(this.#key, vault) : vault) : emptyVault();
     this.assets = v.assets ?? [];
+    // Saved before Bonds and FDs were separate categories; the next save stores the split.
+    for (const a of this.assets) upgradeCategory(a);
     this.ppfRates = v.ppfRates?.length ? v.ppfRates : officialRates();
     this.settings = { lastRefresh: null, failures: {}, ...v.settings };
     this.status = 'ready';

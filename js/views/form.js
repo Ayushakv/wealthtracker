@@ -1,5 +1,5 @@
 import { financialYearStart, fromInputValue, fyLabel, toInputValue } from '../core/calendar.js';
-import { categoryBySlug, categoryInfo, Category, COMPOUNDING, LIC_ENDOWMENT, NPS_TIERS, POLICY_TYPES } from '../core/categories.js';
+import { categoryBySlug, categoryInfo, Category, COMPOUNDING, isFixedIncome, LIC_ENDOWMENT, NPS_TIERS, POLICY_TYPES } from '../core/categories.js';
 import { applyDraft, draftFromAsset, newDraft, npsAllocationTotal, validateDraft } from '../core/draft.js';
 import { fixedIncomeValuation } from '../core/fixedIncome.js';
 import { formatDate, inr, plainNumber } from '../core/format.js';
@@ -83,7 +83,8 @@ function readInto(form, d) {
 
 function institutionLabel(category) {
   switch (category) {
-    case Category.bank: return 'Bank name';
+    case Category.bank:
+    case Category.fd: return 'Bank name';
     case Category.mutualFund: return 'Fund house';
     case Category.insurance: return 'Insurer';
     case Category.p2p: return 'Platform';
@@ -189,12 +190,20 @@ function categorySections(d, { rates, now }) {
         </section>`;
 
     case Category.bonds:
+    case Category.fd: {
+      const fd = d.category === Category.fd;
       return html`
         ${group(
-          { title: 'Instrument', foot: 'Turn off interest calculation for market-traded bonds (SGBs, NCDs, G-secs) to enter the current value from your demat statement instead.' },
+          {
+            title: fd ? 'Deposit' : 'Instrument',
+            foot: fd
+              ? 'Valued from the interest earned since the start date.'
+              : 'Turn off interest calculation for market-traded bonds (SGBs, NCDs, G-secs) to enter the current value from your demat statement instead.',
+          },
           [
+            select('category', 'Kind', [{ value: Category.fd, label: 'Fixed deposit' }, { value: Category.bonds, label: 'Bond' }], d.category),
             amountField('investedAmount', 'Principal', d.investedAmount),
-            percentField('interestRate', 'Coupon / interest rate', d.interestRate),
+            percentField('interestRate', fd ? 'Interest rate' : 'Coupon / interest rate', d.interestRate),
             toggle('hasStartDate', 'Calculate value from interest', d.hasStartDate),
             showIf('hasStartDate', d, [
               select('compounding', 'Compounding', COMPOUNDING.map((c) => ({ value: c.raw, label: c.raw })), d.compounding),
@@ -207,6 +216,7 @@ function categorySections(d, { rates, now }) {
           ],
         )}
         <div data-derived="projection" ${d.hasStartDate ? '' : 'hidden'}>${projection(d)}</div>`;
+    }
 
     case Category.p2p:
       return group({ title: 'Ledger', foot: 'Copy these totals from your LenDenClub dashboard. Outstanding balance is what counts towards net worth.' }, [
@@ -273,7 +283,7 @@ function update(form, ctx) {
     if (el) setHTML(el, fragment);
   };
   if (d.category === Category.mutualFund) derived('mf-nav', mfNav(d));
-  if (d.category === Category.bonds) {
+  if (isFixedIncome(d.category)) {
     derived('projection', projection(d));
     form.querySelector('[data-derived="projection"]').hidden = !d.hasStartDate;
     const maturity = form.querySelector('[name="maturityDate"]');

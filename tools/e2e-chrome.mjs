@@ -219,9 +219,10 @@ try {
   await click('[data-save]');
   await waitFor(`location.hash === '${ppfHref}' && document.querySelector('h1')?.textContent === 'PPF — renamed'`, 'renamed and back on detail');
 
-  step('New bond with live projection');
-  await go('#/new/bonds');
-  await waitFor(`document.querySelector('[name="interestRate"]')`, 'bond form');
+  step('New fixed deposit with live projection');
+  await go('#/new/fd');
+  await waitFor(`document.querySelector('[name="interestRate"]')`, 'FD form');
+  assert(await evaluate(`document.querySelector('[name="category"]').value === 'Fixed Deposits' && document.querySelector('h1').textContent.includes('New FDs')`), 'FD form with its kind');
   assert(await evaluate(`document.querySelector('[data-save]').disabled`), 'Save disabled while empty');
   await fill('[name="name"]', 'SBI FD');
   await fill('[name="investedAmount"]', '200000');
@@ -230,10 +231,11 @@ try {
   await shot('bond-form', { full: true });
   await click('[data-save]');
   // Save steps back to wherever "New" was opened from (the PPF detail here).
-  await waitFor(`location.hash === '${ppfHref}'`, 'back after saving the bond');
+  await waitFor(`location.hash === '${ppfHref}'`, 'back after saving the FD');
   await go('#/assets');
-  await waitFor(`${ROWS} === ${assetCount + 1}`, 'bond saved');
-  assert(await evaluate(`[...document.querySelectorAll('a.list-row .name')].some((n) => n.textContent === 'SBI FD')`), 'bond listed');
+  await waitFor(`${ROWS} === ${assetCount + 1}`, 'FD saved');
+  const fdGroup = `[...document.querySelectorAll('section.group')].find((s) => s.querySelector('.group-title').textContent.includes('Fixed Deposits'))`;
+  assert(await evaluate(`[...${fdGroup}.querySelectorAll('a.list-row .name')].map((n) => n.textContent).join() === 'HDFC Bank FD,SBI FD'`), 'FD listed under Fixed Deposits');
   assert(await evaluate(`[...document.querySelectorAll('a.list-row .name')].some((n) => n.textContent === 'PPF — renamed')`), 'rename kept');
 
   step('Settings and PPF rates');
@@ -330,8 +332,8 @@ try {
   await waitFor(`location.hash === '#/assets' && ${ROWS} === ${assetCount + 10}`, 'six bonds and a fund added');
   const groupNamed = (name) => `[...document.querySelectorAll('section.group')].find((s) => s.querySelector('.group-title').textContent.includes(${JSON.stringify(name)}))`;
   assert(await evaluate(`${groupNamed('Mutual Funds')}.textContent.includes('EXAMPLE MUTUAL FUND')`), 'demat fund listed under Mutual Funds');
-  const subSections = await evaluate(`[...${groupNamed('Bonds & FDs')}.querySelectorAll('.sub-heading > span:first-child')].map((h) => h.textContent.replace(/\\s+/g, ' ').trim())`);
-  assert(subSections.join() === 'Government Securities 1,Corporate Bonds 4,Securitised Instruments 1,Other Bonds & FDs 2', `bonds split by section (${subSections})`);
+  const subSections = await evaluate(`[...${groupNamed('Bonds')}.querySelectorAll('.sub-heading > span:first-child')].map((h) => h.textContent.replace(/\\s+/g, ' ').trim())`);
+  assert(subSections.join() === 'Government Securities 1,Corporate Bonds 4,Securitised Instruments 1', `bonds split by section (${subSections})`);
   assert(!(await text('main')).includes('GOI LOAN'), 'unticked bond not imported');
   await shot('assets-sections', { full: true });
   const sgb = await evaluate(`[...document.querySelectorAll('a.list-row')].find((a) => a.textContent.includes('SGB 2020-21'))?.getAttribute('href')`);
@@ -347,7 +349,8 @@ try {
   await shot('bond-edit');
 
   step('Next month’s statement: updates, and removes a bond no longer held');
-  // Seven more FDs, and a bond an earlier import brought in that this statement no longer lists.
+  // Seven more FDs, and a bond an earlier import brought in that this statement no longer lists, from a backup made
+  // when bonds and FDs shared one category: the FDs move to Fixed Deposits and the NCD to Bonds.
   const now = Date.now();
   const extra = [
     ...Array.from({ length: 7 }, (_, i) => createAsset({ category: 'Bonds & FDs', name: `Bank FD ${i + 1}`, investedAmount: 100000, currentValuation: 100000 }, now)),
@@ -370,10 +373,11 @@ try {
   await waitFor(`document.querySelector('#toast.show')?.textContent.includes('Updated 7, removed 1 no longer held')`, 'monthly import toast');
   await waitFor(`location.hash === '#/assets' && ${ROWS} === ${assetCount + 17}`, 'stale bond removed, nothing duplicated');
   assert(!(await text('main')).includes('Matured NCD'), 'stale bond gone');
+  assert(await evaluate(`${fdGroup}.textContent.includes('Bank FD 1') && !${groupNamed('Bonds')}.textContent.includes('Bank FD')`), 'old combined-category FDs moved to Fixed Deposits');
 
   step('Long sections show five, then all');
-  const other = `[...document.querySelectorAll('[data-action="toggle-group"]')].find((b) => b.dataset.group === 'bonds:')`;
-  assert(await evaluate(`${other}?.textContent.trim() === 'Show all 9' && ${other}.getAttribute('aria-expanded') === 'false'`), 'Other Bonds & FDs folds to five');
+  const other = `[...document.querySelectorAll('[data-action="toggle-group"]')].find((b) => b.dataset.group === 'fd')`;
+  assert(await evaluate(`${other}?.textContent.trim() === 'Show all 9' && ${other}.getAttribute('aria-expanded') === 'false'`), 'Fixed Deposits folds to five');
   await shot('assets-collapsed', { full: true });
   await evaluate(`${other}.click()`);
   await waitFor(`${other}?.textContent.includes('Show fewer') && document.querySelectorAll('a.list-row').length === ${assetCount + 17}`, 'section expanded');

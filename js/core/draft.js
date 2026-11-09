@@ -1,5 +1,5 @@
 import { addYears, financialYearStart } from './calendar.js';
-import { Category, DEFAULT_COMPOUNDING, LIC_ENDOWMENT } from './categories.js';
+import { Category, DEFAULT_COMPOUNDING, isFixedIncome, LIC_ENDOWMENT } from './categories.js';
 import { createAsset, recompute } from './assets.js';
 
 /**
@@ -17,7 +17,7 @@ export function newDraft(category, now = Date.now()) {
     bankLast4: '',
     lastReconciled: now,
     locationDetails: '',
-    hasStartDate: category === Category.bonds,
+    hasStartDate: isFixedIncome(category),
     startDate: now,
     amfiCode: '',
     unitsHeld: null,
@@ -110,6 +110,7 @@ export function validateDraft(d) {
       if (!((d.unitsHeld ?? 0) > 0)) return 'Enter units held.';
       break;
     case Category.bonds:
+    case Category.fd:
       if (!((d.investedAmount ?? 0) > 0)) return 'Enter the principal.';
       // Without a start date the bond is valued at the current value entered (e.g. imported from a demat statement).
       if (!d.hasStartDate) {
@@ -180,6 +181,7 @@ export function applyDraft(d, asset, rates, now = Date.now()) {
       a.maturityDate = d.hasMaturityDate ? d.maturityDate : undefined;
       break;
     case Category.bonds:
+    case Category.fd:
       a.interestRate = opt(d.interestRate);
       a.compounding = d.compounding;
       a.isPayout = d.isPayout;
