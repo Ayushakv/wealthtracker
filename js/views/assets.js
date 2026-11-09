@@ -1,5 +1,6 @@
 import { byName, countsTowardsNetWorth, gain, gainFraction } from '../core/assets.js';
 import { CATEGORIES, Category, categoryInfo } from '../core/categories.js';
+import { INSTRUMENT_ORDER } from '../core/demat.js';
 import { formatDate, inr, inrCompact, number, percent, plainNumber } from '../core/format.js';
 import { html } from '../ui/html.js';
 import { icon } from '../ui/icons.js';
@@ -48,6 +49,38 @@ function assetRow(a) {
   </li>`;
 }
 
+const valueOf = (items) => items.filter(countsTowardsNetWorth).reduce((s, a) => s + a.currentValuation, 0);
+
+/**
+ * Bonds imported from a demat statement keep the section it listed them under (Corporate Bonds, Securitised
+ * Instruments…); a category holding them is split the same way, with everything else last.
+ */
+function subgroups(c, items) {
+  if (!items.some((a) => a.instrument)) return [{ key: c.slug, name: null, items }];
+  const byName = new Map();
+  for (const a of items) {
+    const name = a.instrument ?? null;
+    if (!byName.has(name)) byName.set(name, []);
+    byName.get(name).push(a);
+  }
+  const rank = (name) => (name == null ? Infinity : INSTRUMENT_ORDER.includes(name) ? INSTRUMENT_ORDER.indexOf(name) : INSTRUMENT_ORDER.length);
+  return [...byName]
+    .sort(([a], [b]) => rank(a) - rank(b) || (a ?? '').localeCompare(b ?? ''))
+    .map(([name, list]) => ({ key: `${c.slug}:${name ?? ''}`, name: name ?? `Other ${c.short}`, items: list }));
+}
+
+/** A run of assets; a long one shows the first few and a button for the rest (unless a category filter is picked). */
+function assetRun({ key, name, items }, titled) {
+  const long = !filter && items.length > PREVIEW + 1;
+  const open = !long || expanded.has(key);
+  return html`${titled
+    ? html`<li class="sub-heading split"><span>${name} <span class="count">${items.length}</span></span><span class="num">${inrCompact(valueOf(items))}</span></li>`
+    : ''}${(open ? items : items.slice(0, PREVIEW)).map(assetRow)}${long
+    ? html`<li><button class="row row-button" data-action="toggle-group" data-group="${key}" data-total="${items.length}" aria-expanded="${String(open)}">
+        ${icon('chevron', open ? 'chev-up' : 'chev-down')}${open ? 'Show fewer' : `Show all ${items.length}`}</button></li>`
+    : ''}`;
+}
+
 function addMenu() {
   return html`<details class="menu">
     <summary class="btn btn-primary" aria-label="Add Asset">${icon('plus')}<span class="hide-narrow">Add Asset</span></summary>
@@ -86,21 +119,13 @@ export const assetsView = {
       return html`${head}${emptyState({ iconName: c.icon, title: `No ${c.short} Assets` })}`;
     }
     return html`${head}${sections.map(({ c, items }) => {
-      // Picking one category in the filter shows all of it.
-      const long = !filter && items.length > PREVIEW + 1;
-      const open = !long || expanded.has(c.slug);
+      const runs = subgroups(c, items);
       return html`<section class="group">
         <h2 class="group-title split">
-          <span>${icon(c.icon)} ${c.raw}${long ? html` <span class="count">${items.length}</span>` : ''}</span>
-          <span class="num">${inrCompact(items.filter(countsTowardsNetWorth).reduce((s, a) => s + a.currentValuation, 0))}</span>
+          <span>${icon(c.icon)} ${c.raw}${items.length > PREVIEW + 1 ? html` <span class="count">${items.length}</span>` : ''}</span>
+          <span class="num">${inrCompact(valueOf(items))}</span>
         </h2>
-        <ul class="group-body plain-list">
-          ${(open ? items : items.slice(0, PREVIEW)).map(assetRow)}
-          ${long
-            ? html`<li><button class="row row-button" data-action="toggle-group" data-group="${c.slug}" aria-expanded="${String(open)}">
-                ${icon('chevron', open ? 'chev-up' : 'chev-down')}${open ? 'Show fewer' : `Show all ${items.length}`}</button></li>`
-            : ''}
-        </ul>
+        <ul class="group-body plain-list">${runs.map((run) => assetRun(run, runs.length > 1))}</ul>
       </section>`;
     })}`;
   },

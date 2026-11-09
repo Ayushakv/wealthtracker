@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startServer } from './serve.mjs';
+import { createAsset } from '../js/core/assets.js';
 import { exportBackup } from '../js/core/backup.js';
 import { OFFICIAL_HISTORY, RateSchedule } from '../js/core/ppf.js';
 import { samplePortfolio } from '../tests/seed.js';
@@ -183,7 +184,7 @@ try {
   await go('#/assets');
   await waitFor(`document.querySelector('h1')?.textContent === 'Assets' && document.querySelector('a.list-row')`, 'asset list');
   // Every asset listed, counting those folded away in long groups (which show five and a "Show all" button).
-  const ROWS = `[...document.querySelectorAll('section.group')].reduce((n, s) => n + (s.querySelector('[data-action="toggle-group"][aria-expanded="false"]') ? Number(s.querySelector('.group-title .count').textContent) : s.querySelectorAll('a.list-row').length), 0)`;
+  const ROWS = `document.querySelectorAll('a.list-row').length + [...document.querySelectorAll('[data-action="toggle-group"][aria-expanded="false"]')].reduce((n, b) => n + Number(b.dataset.total) - 5, 0)`;
   const assetCount = await evaluate(ROWS);
   await shot('assets', { full: true });
   await evaluate(`(() => { const s = document.querySelector('[data-change="filter"]'); s.value = 'ppf'; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
@@ -302,45 +303,81 @@ try {
   await go('#/assets');
 
   step('Import bonds and a demat fund from an NSDL statement, unticking one bond');
-  await click('details.menu > summary');
-  await chooseFile('[data-action="import-cas"]', fileURLToPath(new URL('../tests/fixtures/sample-nsdl.pdf', import.meta.url)));
-  await waitFor(`document.querySelector('dialog[open] [name="password"]')`, 'password dialog', 15_000);
-  await fill('dialog [name="password"]', 'ABCDE1234F');
-  await click('dialog .btn-primary');
-  await waitFor(`document.querySelector('dialog[open] .cas-list')`, 'bond review dialog', 15_000);
+  const nsdl = fileURLToPath(new URL('../tests/fixtures/sample-nsdl.pdf', import.meta.url));
+  const openNSDL = async () => {
+    await go('#/assets');
+    await click('details.menu > summary');
+    await chooseFile('[data-action="import-cas"]', nsdl);
+    await waitFor(`document.querySelector('dialog[open] [name="password"]')`, 'password dialog', 15_000);
+    await fill('dialog [name="password"]', 'ABCDE1234F');
+    await click('dialog .btn-primary');
+    await waitFor(`document.querySelector('dialog[open] .cas-list')`, 'demat review dialog', 15_000);
+  };
+  const reviewRows = `[...document.querySelectorAll('dialog .cas-item')].map((li) => li.textContent.replace(/\\s+/g, ' ').trim())`;
+  const reviewHeadings = `[...document.querySelectorAll('dialog .cas-heading > span:first-child')].map((h) => h.textContent.trim())`;
+  const untick = (name) => evaluate(`[...document.querySelectorAll('dialog .cas-item')].find((l) => l.textContent.includes(${JSON.stringify(name)})).querySelector('input').click()`);
+  await openNSDL();
   assert((await text('dialog h2')) === 'Import 1 Fund and 7 Bonds', `bond review title (${await text('dialog h2')})`);
-  const bonds = await evaluate(`[...document.querySelectorAll('dialog .cas-item')].map((li) => li.textContent.replace(/\\s+/g, ' ').trim())`);
+  const bonds = await evaluate(reviewRows);
   assert(bonds.some((r) => r.includes('SGB 2020-21 SERIES VIII') && r.includes('2.5%') && r.includes('₹1,50,240') && r.includes('New')), `SGB listed (${JSON.stringify(bonds)})`);
   assert(bonds[0].includes('INF000Y01AB2') && bonds[0].includes('250.500 units') && bonds[0].includes('₹20,103'), `demat fund listed first (${bonds[0]})`);
-  assert(await evaluate(`[...document.querySelectorAll('dialog .cas-heading')].map((h) => h.textContent).join() === 'Mutual Funds,Bonds'`), 'fund and bond headings');
+  const sections = await evaluate(reviewHeadings);
+  assert(sections.join() === 'Mutual Funds · 1,Government Securities · 2,Corporate Bonds · 4,Securitised Instruments · 1', `the statement's sections (${sections})`);
   await shot('bond-review', { full: true });
-  await evaluate(`[...document.querySelectorAll('dialog .cas-item')].find((l) => l.textContent.includes('GOI LOAN')).querySelector('input').click()`);
+  await untick('GOI LOAN');
   await click('dialog [data-ok]');
-  await waitFor(`document.querySelector('#toast.show')?.textContent.includes('Imported 6 bonds and 1 fund')`, 'bond import toast');
+  await waitFor(`document.querySelector('#toast.show')?.textContent.includes('Added 6 bonds and 1 fund')`, 'bond import toast');
   await waitFor(`location.hash === '#/assets' && ${ROWS} === ${assetCount + 10}`, 'six bonds and a fund added');
-  const fundGroup = `[...document.querySelectorAll('section.group')].find((s) => s.textContent.includes('Mutual Funds'))`;
-  assert(await evaluate(`${fundGroup}.textContent.includes('INF000Y01AB2') || ${fundGroup}.textContent.includes('EXAMPLE MUTUAL FUND')`), 'demat fund listed under Mutual Funds');
-
-  step('Long groups show five, then all');
-  const bondGroup = `[...document.querySelectorAll('section.group')].find((s) => s.querySelector('[data-action="toggle-group"]'))`;
-  assert(await evaluate(`${bondGroup}.querySelectorAll('a.list-row').length === 5`), 'a long group shows five');
-  assert(await evaluate(`${bondGroup}.querySelector('[data-action="toggle-group"]').textContent.trim() === 'Show all ' + ${bondGroup}.querySelector('.group-title .count').textContent`), 'Show all N');
-  await shot('assets-collapsed', { full: true });
-  await evaluate(`${bondGroup}.querySelector('[data-action="toggle-group"]').click()`);
-  await waitFor(`${bondGroup}.querySelectorAll('a.list-row').length === Number(${bondGroup}.querySelector('.group-title .count').textContent) && ${bondGroup}.querySelector('[data-action="toggle-group"]').textContent.includes('Show fewer')`, 'group expanded');
+  const groupNamed = (name) => `[...document.querySelectorAll('section.group')].find((s) => s.querySelector('.group-title').textContent.includes(${JSON.stringify(name)}))`;
+  assert(await evaluate(`${groupNamed('Mutual Funds')}.textContent.includes('EXAMPLE MUTUAL FUND')`), 'demat fund listed under Mutual Funds');
+  const subSections = await evaluate(`[...${groupNamed('Bonds & FDs')}.querySelectorAll('.sub-heading > span:first-child')].map((h) => h.textContent.replace(/\\s+/g, ' ').trim())`);
+  assert(subSections.join() === 'Government Securities 1,Corporate Bonds 4,Securitised Instruments 1,Other Bonds & FDs 2', `bonds split by section (${subSections})`);
   assert(!(await text('main')).includes('GOI LOAN'), 'unticked bond not imported');
-  await shot('assets-expanded', { full: true });
+  await shot('assets-sections', { full: true });
   const sgb = await evaluate(`[...document.querySelectorAll('a.list-row')].find((a) => a.textContent.includes('SGB 2020-21'))?.getAttribute('href')`);
   await go(sgb);
   await waitFor(`document.querySelector('h1')?.textContent.includes('SGB 2020-21')`, 'imported bond detail');
   const bondDetail = await text('main');
-  assert(bondDetail.includes('₹1,50,240') && bondDetail.includes('IN30009512345678') && bondDetail.includes('IN0020200195') && bondDetail.includes('10 Nov 2028'), `bond value, account, ISIN and maturity shown (${bondDetail})`);
+  assert(bondDetail.includes('₹1,50,240') && bondDetail.includes('Government Securities') && bondDetail.includes('IN30009512345678') && bondDetail.includes('IN0020200195') && bondDetail.includes('10 Nov 2028'), `bond value, type, account, ISIN and maturity shown (${bondDetail})`);
   await shot('bond-detail', { full: true });
   await go(`${sgb}/edit`);
   await waitFor(`document.querySelector('[name="hasStartDate"]')`, 'bond edit form');
   const bondForm = await evaluate(`({ accrual: document.querySelector('[name="hasStartDate"]').checked, value: document.querySelector('[name="currentValuation"]').closest('[data-show-if]').hidden, start: document.querySelector('[name="startDate"]').closest('[data-show-if]').hidden, projection: document.querySelector('[data-derived="projection"]').hidden })`);
   assert(!bondForm.accrual && !bondForm.value && bondForm.start && bondForm.projection, `market-valued bond edits its current value (${JSON.stringify(bondForm)})`);
   await shot('bond-edit');
+
+  step('Next month’s statement: updates, and removes a bond no longer held');
+  // Seven more FDs, and a bond an earlier import brought in that this statement no longer lists.
+  const now = Date.now();
+  const extra = [
+    ...Array.from({ length: 7 }, (_, i) => createAsset({ category: 'Bonds & FDs', name: `Bank FD ${i + 1}`, investedAmount: 100000, currentValuation: 100000 }, now)),
+    createAsset({ category: 'Bonds & FDs', name: 'Matured NCD', isin: 'INE000X07ZZ1', folio: 'IN30009512345678', instrument: 'Corporate Bonds', investedAmount: 50000, currentValuation: 50000 }, now),
+  ];
+  const extraFile = join(downloads, 'more-assets.json');
+  await writeFile(extraFile, exportBackup({ assets: extra, ppfRates: OFFICIAL_HISTORY }));
+  await go('#/settings');
+  await waitFor(`document.querySelector('[data-action="import"]')`, 'settings');
+  await chooseFile('[data-action="import"]', extraFile);
+  await waitFor(`document.querySelector('#toast.show')?.textContent.includes('Imported 8 assets')`, 'extra assets imported');
+  await openNSDL();
+  const monthly = await evaluate(reviewRows);
+  assert((await evaluate(reviewHeadings)).at(-1) === 'No Longer in the Statement · 1', 'removals listed last');
+  assert(monthly.at(-1).includes('Matured NCD') && monthly.at(-1).includes('Remove'), `stale bond to be removed (${monthly.at(-1)})`);
+  assert(monthly.filter((r) => r.includes('No change')).length === 7, `unchanged holdings marked (${JSON.stringify(monthly)})`);
+  await shot('monthly-review', { full: true });
+  await untick('GOI LOAN');
+  await click('dialog [data-ok]');
+  await waitFor(`document.querySelector('#toast.show')?.textContent.includes('Updated 7, removed 1 no longer held')`, 'monthly import toast');
+  await waitFor(`location.hash === '#/assets' && ${ROWS} === ${assetCount + 17}`, 'stale bond removed, nothing duplicated');
+  assert(!(await text('main')).includes('Matured NCD'), 'stale bond gone');
+
+  step('Long sections show five, then all');
+  const other = `[...document.querySelectorAll('[data-action="toggle-group"]')].find((b) => b.dataset.group === 'bonds:')`;
+  assert(await evaluate(`${other}?.textContent.trim() === 'Show all 9' && ${other}.getAttribute('aria-expanded') === 'false'`), 'Other Bonds & FDs folds to five');
+  await shot('assets-collapsed', { full: true });
+  await evaluate(`${other}.click()`);
+  await waitFor(`${other}?.textContent.includes('Show fewer') && document.querySelectorAll('a.list-row').length === ${assetCount + 17}`, 'section expanded');
+  await shot('assets-expanded', { full: true });
   await go('#/assets');
 
   step('Turn on passcode → data encrypted at rest');

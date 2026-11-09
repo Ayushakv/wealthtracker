@@ -677,8 +677,13 @@ dialog.wide { width: min(560px, calc(100vw - 32px)); }
 .cas-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; }
 .cas-item + .cas-item, .cas-list > li + li > .cas-item { border-top: 0.5px solid var(--sep); }
 label.cas-item { cursor: pointer; }
+.sub-heading { padding: 12px 16px 4px; color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.sub-heading .count, .cas-heading .count { font-variant-numeric: tabular-nums; letter-spacing: 0; opacity: 0.8; }
+.group-body > li + .sub-heading { border-top: 0.5px solid var(--sep); margin-top: 4px; }
 .cas-heading { padding: 10px 12px 4px; color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
 .cas-list > li + .cas-heading { border-top: 0.5px solid var(--sep); margin-top: 4px; }
+.sub-heading.split, .cas-heading.split { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.sub-heading .num, .cas-heading .num { text-transform: none; letter-spacing: 0; font-weight: 500; }
 .cas-item input[type="checkbox"] { flex: none; width: 20px; height: 20px; margin: 0; accent-color: var(--accent); }
 .sheet .icon { vertical-align: -0.15em; }
 .sheet-actions .btn { height: 42px; min-width: 96px; }

@@ -4,7 +4,7 @@ import { createAsset } from '../js/core/assets.js';
 import { date as d } from '../js/core/calendar.js';
 import { CASError } from '../js/core/cas.js';
 import { Category } from '../js/core/categories.js';
-import { bondFromHolding, isDebtISIN, isDepositoryStatement, parseDemat, parseStatementDate, planBondImport } from '../js/core/demat.js';
+import { bondFromHolding, goneFromStatement, isDebtISIN, isDepositoryStatement, parseDemat, parseStatementDate, planBondImport } from '../js/core/demat.js';
 import { applyDraft, draftFromAsset, newDraft, validateDraft } from '../js/core/draft.js';
 
 /**
@@ -25,6 +25,14 @@ const NSDL = page([
   'NSDL Consolidated Account Statement',
   'Statement for the period from 01-Sep-2026 to 30-Sep-2026',
   'Consolidated Portfolio Valuation',
+  // The summary: each section's value across every account, and its share of the total.
+  'Asset Class  Value (₹)  %',
+  'Equities (E)  1,47,505.00  15.00%',
+  'Mutual Funds (M)  20,102.63  2.00%',
+  'Corporate Bonds (C)  2,38,580.00  30.00%',
+  'Securitised Instruments (S)  2,01,840.00  20.00%',
+  'Government Securities (G)  2,51,490.00  25.00%',
+  'Mutual Fund Folios (F)  2,40,770.54  8.00%',
   'NSDL Demat Account  DP Name: SOME BROKING LIMITED',
   'DP ID: IN300095  Client ID: 12345678',
   'Equities (E)',
@@ -169,6 +177,38 @@ describe('NSDL/CDSL bond import', () => {
     assert.deepEqual(s.funds.map((f) => [f.units, f.nav, f.value]), [[100, 50, 5000]]);
   });
 
+  test('each holding keeps its section; the summary gives each section’s total', () => {
+    const s = parseDemat(NSDL);
+    assert.deepEqual(
+      s.holdings.map((h) => [h.isin, h.section]),
+      [
+        ['IN0020200195', 'Government Securities'],
+        ['IN0020230085', 'Government Securities'],
+        ['INE000A07AA1', 'Corporate Bonds'],
+        ['INE000B07AB2', 'Corporate Bonds'],
+        ['INE000B07AC0', 'Corporate Bonds'],
+        ['INE000C15011', 'Securitised Instruments'],
+        ['INE000B07AB2', 'Corporate Bonds'],
+        ['INE000B07AD8', 'Corporate Bonds'],
+      ],
+    );
+    assert.equal(s.funds[0].section, 'Mutual Funds');
+    assert.deepEqual(s.summary, {
+      Equities: 147505,
+      'Mutual Funds': 20102.63,
+      'Corporate Bonds': 238580,
+      'Securitised Instruments': 201840,
+      'Government Securities': 251490,
+      'Mutual Fund Folios': 240770.54,
+    });
+    // What was read adds up to the summary, section by section.
+    const total = (section) => s.holdings.filter((h) => h.section === section).reduce((sum, h) => sum + h.value, 0);
+    for (const section of ['Corporate Bonds', 'Securitised Instruments', 'Government Securities']) assert.equal(total(section), s.summary[section], section);
+    // Without section headings, the ISIN decides.
+    assert.deepEqual(parseDemat(CDSL).holdings.map((h) => h.section), ['Government Securities', 'Corporate Bonds']);
+    assert.equal(bondFromHolding({ holding: s.holdings[5], existing: null }).instrument, 'Securitised Instruments');
+  });
+
   test('a table split across pages keeps each name with its own bond', () => {
     const rows = [
       ...page(['DP ID : IN300095 Client ID: 12345678', 'Corporate Bonds (C)', L('ISIN', 'Company Name', 'Value'), L('', 'FIRST FINANCE'), L('INE000D07AA7', 'LIMITED', '12-Jan-2028', '10,000.00'), L('', 'Fixed Interest Bonds')], 1),
@@ -230,12 +270,18 @@ describe('NSDL/CDSL bond import', () => {
     const sold = createAsset({ category: Category.bonds, name: 'Old NCD', isin: 'INE000X07AA1', folio: '1208160012345678', currentValuation: 1000 }, now);
     const otherAccount = createAsset({ category: Category.bonds, name: 'Elsewhere', isin: 'INE000X07BB1', folio: 'IN30009512345678' }, now);
     const manual = createAsset({ category: Category.bonds, name: 'HDFC Bank FD', investedAmount: 100000 }, now);
-    const { items, missing } = planBondImport(s, [imported, sold, otherAccount, manual]);
+    const camsFund = createAsset({ category: Category.mutualFund, name: 'Folio fund', isin: 'INF000Z01AA1', folio: '9876543/21' }, now);
+    const dematFund = createAsset({ category: Category.mutualFund, name: 'Redeemed demat fund', isin: 'INF000Z01AB9', folio: '1208160012345678' }, now);
+    const assets = [imported, sold, otherAccount, manual, camsFund, dematFund];
+    const { items } = planBondImport(s, assets);
     assert.deepEqual(items.map((i) => [i.holding.isin, i.action, i.existing?.name ?? null]), [
       ['IN0020210152', 'update', 'SGB'],
       ['INE848E07AB4', 'new', null],
     ]);
-    assert.deepEqual(missing.map((a) => a.name), ['Old NCD']);
+    // Monthly re-imports drop what earlier imports brought in and the statement no longer lists, in any demat account.
+    // Hand-entered bonds and funds from a CAMS folio are left alone.
+    const matched = new Set(items.map((i) => i.existing?.id).filter(Boolean));
+    assert.deepEqual(goneFromStatement(assets, matched).map((a) => a.name), ['Old NCD', 'Elsewhere', 'Redeemed demat fund']);
   });
 
   test('new bonds take the market value; updates keep the cost and the interest settings', () => {

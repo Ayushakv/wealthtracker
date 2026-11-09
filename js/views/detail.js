@@ -1,6 +1,7 @@
 import { countsTowardsNetWorth, createEntry, fixedIncomeFor, gain, gainFraction, ppfStatementFor } from '../core/assets.js';
 import { fromInputValue, parts, toInputValue } from '../core/calendar.js';
 import { Category, DEFAULT_COMPOUNDING } from '../core/categories.js';
+import { isDematAccount } from '../core/demat.js';
 import { formatDate, formatDateTime, formatMonth, inr, inrCompact, number, percent, plainNumber } from '../core/format.js';
 import { confirmDialog, parseNumber, showDialog } from '../ui/dom.js';
 import { html } from '../ui/html.js';
@@ -25,7 +26,7 @@ function categoryDetails(a, store, now) {
     case Category.mutualFund:
       return group({ title: 'Holding' }, [
         opt('AMFI code', a.amfiCode),
-        opt('Folio', a.folio),
+        opt(isDematAccount(a.folio) ? 'Demat account' : 'Folio', a.folio),
         opt('ISIN', a.isin),
         opt('Units', a.unitsHeld, (v) => number(v, 3)),
         opt('Average NAV', a.averageNAV, (v) => inr(v, 4)),
@@ -45,7 +46,7 @@ function categoryDetails(a, store, now) {
 
     case Category.bonds: {
       const v = fixedIncomeFor(a, now);
-      const holding = [opt('Demat account', a.folio), opt('ISIN', a.isin)];
+      const holding = [opt('Type', a.instrument), opt('Demat account', a.folio), opt('ISIN', a.isin)];
       if (!v) {
         return group({ title: 'Bond', foot: 'Valued at the current value you entered or imported. Edit it to update, or turn on interest calculation.' }, [
           opt('Coupon', a.interestRate, (r) => `${plainNumber(r)}%`),

@@ -67,6 +67,22 @@ function isDebt(isin, section) {
   return DEBT_SECTION.test(section) && !/^INF/.test(isin) && !/^IN[EF][0-9A-Z]{4}01/.test(isin);
 }
 
+/** A demat account number as imports store it in `folio`: an NSDL DP ID + client ID (IN + 14 digits) or a CDSL BO ID. */
+export const isDematAccount = (s) => /^(?:IN\d{14}|\d{16})$/.test(s ?? '');
+
+/** Bonds and funds an earlier depository import created (they carry an ISIN and a demat account). */
+export const fromDemat = (a) => (a.category === Category.bonds || a.category === Category.mutualFund) && Boolean(a.isin) && isDematAccount(a.folio);
+
+/** The order statements list their sections in; others follow alphabetically. */
+export const INSTRUMENT_ORDER = ['Mutual Funds', 'Government Securities', 'Sovereign Gold Bonds', 'Corporate Bonds', 'Securitised Instruments', 'Money Market Instruments'];
+
+/** The section a bond is filed under, named as the statement names it; without headings, guessed from the ISIN. */
+function instrumentOf(isin, section) {
+  const name = section?.replace(/\s+/g, ' ').trim();
+  if (name) return name;
+  return /^IN\d/.test(isin) ? 'Government Securities' : 'Corporate Bonds';
+}
+
 /** Fund units held in the demat account: a "Mutual Funds (M)" section (not "Mutual Fund Folios"), or any INF ISIN when unnamed. */
 function isFund(isin, section) {
   if (!/^INF/.test(isin)) return false;
@@ -91,7 +107,7 @@ function fundFromRow(r, lines, table) {
   const units = candidates.reduce((best, u) => (best == null || off(u) < off(best) ? u : best), null);
   if (units == null || off(units) > 0.005) return null;
   const name = lines.filter((l) => !isKindLabel(l.text)).map((l) => l.text).join(' ').trim();
-  return { account: r.account, isin: r.isin, name: name || r.isin, units, nav, value };
+  return { account: r.account, isin: r.isin, name: name || r.isin, units, nav, value, section: 'Mutual Funds' };
 }
 
 /** Lines whose description cell starts at the description column; wrapped names and kind labels included. */
@@ -192,7 +208,8 @@ function nameApart(holdings) {
 /**
  * Bonds and mutual fund units held in the demat accounts of an NSDL or CDSL statement.
  * @param {import('../ui/pdf.js').Row[]} rows lines of the whole PDF with their positions, in reading order
- * @returns {{ asOf: number|null, holdings: { account, isin, name, value, coupon, maturity }[], funds: { account, isin, name, units, nav, value }[] }}
+ * `summary` is the statement's own total per section ("Corporate Bonds (C)  25,71,094.87  86.82%"), to check the import against.
+ * @returns {{ asOf: number|null, holdings: { account, isin, name, value, coupon, maturity, section }[], funds: { account, isin, name, units, nav, value, section }[], summary: Record<string, number> }}
  */
 export function parseDemat(rows) {
   const all = rows.map((r) => r.text).join('\n');
@@ -207,6 +224,7 @@ export function parseDemat(rows) {
   let account = null;
   let section = null;
   let inTransactions = false;
+  const summary = {};
   for (const row of rows) {
     const text = row.text;
     if (END_RE.test(text)) break;
@@ -221,6 +239,11 @@ export function parseDemat(rows) {
     }
     const heading = isin ? null : SECTION_RE.exec(text);
     if (heading) section = heading[1];
+    // The portfolio summary: a section, its value and its share of the total. The first summary covers every account.
+    const last = row.cells.at(-1)?.text ?? '';
+    if (heading && row.cells.length >= 3 && /^\d{1,3}(?:\.\d+)?%$/.test(last) && NUMBER_RE.test(row.cells.at(-2).text)) {
+      summary[heading[1].replace(/\s+/g, ' ').trim()] ??= parseAmount(row.cells.at(-2).text);
+    }
     // Transactions repeat ISINs (and the account lines); a holdings heading or section ends them.
     if (TRANSACTIONS_RE.test(text)) inTransactions = true;
     else if (heading || HOLDINGS_RE.test(text)) inTransactions = false;
@@ -244,6 +267,7 @@ export function parseDemat(rows) {
       }
       if (!isDebt(r.isin, r.section)) continue;
       const h = holdingFromRow(r, lines, t);
+      if (h) h.section = instrumentOf(r.isin, r.section);
       // A bond is listed once per account; if a summary repeats it, keep the first (the holding row).
       if (h && !found.has(key)) found.set(key, h);
     }
@@ -259,7 +283,7 @@ export function parseDemat(rows) {
     h.maturity ??= twin?.maturity ?? null;
   }
   nameApart(holdings);
-  return { asOf, holdings, funds: [...funds.values()] };
+  return { asOf, holdings, funds: [...funds.values()], summary };
 }
 
 /**
@@ -273,11 +297,16 @@ export function planBondImport(statement, assets) {
     const existing = byKey.get(`${holding.isin}|${holding.account ?? ''}`) ?? null;
     return { holding, existing, action: existing ? 'update' : holding.value > 0 ? 'new' : 'skip' };
   });
-  const seen = new Set(items.map((i) => i.existing?.id).filter(Boolean));
-  const accounts = new Set(statement.holdings.map((h) => h.account ?? ''));
-  // Bonds from an earlier import of these accounts that the statement no longer lists (sold or matured).
-  const missing = bonds.filter((a) => accounts.has(a.folio ?? '') && !seen.has(a.id));
-  return { items, missing };
+  return { items };
+}
+
+/**
+ * Bonds and funds from an earlier depository import that this statement no longer lists: sold, matured or redeemed.
+ * The statement covers every demat account under the PAN, so anything it leaves out has gone.
+ * @param {Set<string>} matched IDs of the assets the statement updates
+ */
+export function goneFromStatement(assets, matched) {
+  return assets.filter((a) => fromDemat(a) && !matched.has(a.id));
 }
 
 /** The saved bond for one item. New bonds are valued at the statement's market value; bonds set to calculate from interest keep doing so. */
@@ -286,6 +315,7 @@ export function bondFromHolding(item, now = Date.now()) {
   const a = item.existing ? structuredClone(item.existing) : createAsset({ category: Category.bonds, name: h.name, investedAmount: h.value }, now);
   a.isin = h.isin;
   if (h.account) a.folio = h.account;
+  if (h.section) a.instrument = h.section;
   if (a.interestRate == null && h.coupon != null) a.interestRate = h.coupon;
   if (a.maturityDate == null && h.maturity != null) a.maturityDate = h.maturity;
   if (a.startDate == null) {

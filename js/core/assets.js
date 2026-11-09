@@ -28,6 +28,8 @@ export const FIELD_TYPES = Object.freeze({
   navDate: 'date',
   folio: 'string',
   isin: 'string',
+  /** The statement section a demat holding was listed under, e.g. "Corporate Bonds" or "Securitised Instruments". */
+  instrument: 'string',
   pran: 'string',
   npsTier: 'string',
   npsEquityPct: 'number',

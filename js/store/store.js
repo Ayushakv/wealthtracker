@@ -257,6 +257,19 @@ export class Store extends EventTarget {
     });
   }
 
+  /** Adds or replaces some assets and removes others in one save (a statement import). */
+  updateAssets(upserts, removeIDs = []) {
+    const gone = new Set(removeIDs);
+    return this.mutate(() => {
+      this.assets = this.assets.filter((a) => !gone.has(a.id));
+      for (const asset of upserts) {
+        const i = this.assets.findIndex((a) => a.id === asset.id);
+        if (i >= 0) this.assets[i] = asset;
+        else this.assets.push(asset);
+      }
+    });
+  }
+
   addEntry(id, entry) {
     return this.mutate(() => {
       const a = this.asset(id);
