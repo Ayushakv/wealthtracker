@@ -67,6 +67,33 @@ function isDebt(isin, section) {
   return DEBT_SECTION.test(section) && !/^INF/.test(isin) && !/^IN[EF][0-9A-Z]{4}01/.test(isin);
 }
 
+/** Fund units held in the demat account: a "Mutual Funds (M)" section (not "Mutual Fund Folios"), or any INF ISIN when unnamed. */
+function isFund(isin, section) {
+  if (!/^INF/.test(isin)) return false;
+  return section == null || (/^Mutual\s+Funds?$/i.test(section.trim()));
+}
+
+/**
+ * A fund's row: its name, the price (NAV) and value, and its units among the balances stacked around the row.
+ * The current balance is the figure that times the NAV gives the value; a row without one (a lock-in list) isn't a holding.
+ */
+function fundFromRow(r, lines, table) {
+  const own = lines.find((l) => l.r === r);
+  const numbersIn = (row, from = 0) => row.cells.slice(from).filter((c) => !isTextCell(c)).flatMap((c) => c.text.split(/\s+/)).filter((t) => NUMBER_RE.test(t)).map(parseAmount);
+  const figures = numbersIn(r.row, own ? own.cell + 1 : 1);
+  if (figures.length < 2) return null;
+  const [nav, value] = figures.slice(-2);
+  if (!(nav > 0 && value > 0)) return null;
+  const i = table.indexOf(r);
+  const around = [table[i - 1], table[i + 1]].filter((n) => n && !n.isin && Math.abs(n.row.y - r.row.y) <= 2.5 * r.row.cells[0].h);
+  const candidates = [...figures.slice(0, -2), ...around.flatMap((n) => numbersIn(n.row))].filter((u) => u > 0);
+  const off = (u) => Math.abs(u * nav - value) / value;
+  const units = candidates.reduce((best, u) => (best == null || off(u) < off(best) ? u : best), null);
+  if (units == null || off(units) > 0.005) return null;
+  const name = lines.filter((l) => !isKindLabel(l.text)).map((l) => l.text).join(' ').trim();
+  return { account: r.account, isin: r.isin, name: name || r.isin, units, nav, value };
+}
+
 /** Lines whose description cell starts at the description column; wrapped names and kind labels included. */
 function descriptionLines(table) {
   const isinRows = table.filter((r) => r.isin);
@@ -163,10 +190,11 @@ function nameApart(holdings) {
 }
 
 /**
+ * Bonds and mutual fund units held in the demat accounts of an NSDL or CDSL statement.
  * @param {import('../ui/pdf.js').Row[]} rows lines of the whole PDF with their positions, in reading order
- * @returns {{ asOf: number|null, holdings: { account, isin, name, value, coupon, maturity }[] }}
+ * @returns {{ asOf: number|null, holdings: { account, isin, name, value, coupon, maturity }[], funds: { account, isin, name, units, nav, value }[] }}
  */
-export function parseDematBonds(rows) {
+export function parseDemat(rows) {
   const all = rows.map((r) => r.text).join('\n');
   const period = /(\d{1,2}[-/](?:[A-Za-z]{3}|\d{2})[-/]\d{4})\s+to\s+(\d{1,2}[-/](?:[A-Za-z]{3}|\d{2})[-/]\d{4})/i.exec(all);
   const asOn = /as\s+on\s+(\d{1,2}[-/](?:[A-Za-z]{3}|\d{2})[-/]\d{4})/i.exec(all);
@@ -204,18 +232,25 @@ export function parseDematBonds(rows) {
   }
 
   const found = new Map();
+  const funds = new Map();
   for (const t of tables) {
     if (!t.some((r) => r.isin)) continue;
     for (const [r, lines] of assignDescriptions(t)) {
+      const key = `${r.isin}|${r.account}`;
+      if (isFund(r.isin, r.section)) {
+        const f = fundFromRow(r, lines, t);
+        if (f && !funds.has(key)) funds.set(key, f);
+        continue;
+      }
       if (!isDebt(r.isin, r.section)) continue;
       const h = holdingFromRow(r, lines, t);
       // A bond is listed once per account; if a summary repeats it, keep the first (the holding row).
-      if (h && !found.has(`${h.isin}|${h.account}`)) found.set(`${h.isin}|${h.account}`, h);
+      if (h && !found.has(key)) found.set(key, h);
     }
   }
   const holdings = [...found.values()];
-  if (!holdings.length) {
-    throw new CASError('No bonds found in this statement. Shares and mutual funds in a demat statement aren’t imported — use the CAMS/KFintech statement for mutual funds.');
+  if (!holdings.length && !funds.size) {
+    throw new CASError('No bonds or mutual funds found in this statement. Shares in a demat account aren’t imported.');
   }
   // NSDL's table gives no coupon; the same bond in a CDSL account does.
   for (const h of holdings) {
@@ -224,7 +259,7 @@ export function parseDematBonds(rows) {
     h.maturity ??= twin?.maturity ?? null;
   }
   nameApart(holdings);
-  return { asOf, holdings };
+  return { asOf, holdings, funds: [...funds.values()] };
 }
 
 /**

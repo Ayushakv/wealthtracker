@@ -182,7 +182,9 @@ try {
   step('Assets list and filter');
   await go('#/assets');
   await waitFor(`document.querySelector('h1')?.textContent === 'Assets' && document.querySelector('a.list-row')`, 'asset list');
-  const assetCount = await evaluate(`document.querySelectorAll('a.list-row').length`);
+  // Every asset listed, counting those folded away in long groups (which show five and a "Show all" button).
+  const ROWS = `[...document.querySelectorAll('section.group')].reduce((n, s) => n + (s.querySelector('[data-action="toggle-group"][aria-expanded="false"]') ? Number(s.querySelector('.group-title .count').textContent) : s.querySelectorAll('a.list-row').length), 0)`;
+  const assetCount = await evaluate(ROWS);
   await shot('assets', { full: true });
   await evaluate(`(() => { const s = document.querySelector('[data-change="filter"]'); s.value = 'ppf'; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
   await waitFor(`document.querySelectorAll('section.group').length === 1`, 'filtered to PPF');
@@ -229,7 +231,7 @@ try {
   // Save steps back to wherever "New" was opened from (the PPF detail here).
   await waitFor(`location.hash === '${ppfHref}'`, 'back after saving the bond');
   await go('#/assets');
-  await waitFor(`document.querySelectorAll('a.list-row').length === ${assetCount + 1}`, 'bond saved');
+  await waitFor(`${ROWS} === ${assetCount + 1}`, 'bond saved');
   assert(await evaluate(`[...document.querySelectorAll('a.list-row .name')].some((n) => n.textContent === 'SBI FD')`), 'bond listed');
   assert(await evaluate(`[...document.querySelectorAll('a.list-row .name')].some((n) => n.textContent === 'PPF — renamed')`), 'rename kept');
 
@@ -267,7 +269,7 @@ try {
   await chooseFile('[data-action="import"]', join(downloads, backupFile));
   await waitFor(`document.querySelector('#toast.show')?.textContent.includes('Imported ${assetCount + 1} assets')`, 'import toast');
   await go('#/assets');
-  await waitFor(`document.querySelectorAll('a.list-row').length === ${assetCount + 1}`, 'no duplicates after import');
+  await waitFor(`${ROWS} === ${assetCount + 1}`, 'no duplicates after import');
 
   step('Import mutual funds from a password-protected CAS PDF');
   await click('details.menu > summary');
@@ -288,7 +290,7 @@ try {
   await shot('cas-review');
   await click('dialog [data-ok]');
   await waitFor(`document.querySelector('#toast.show')?.textContent.includes('Imported 3 funds')`, 'CAS import toast');
-  await waitFor(`location.hash === '#/assets' && document.querySelectorAll('a.list-row').length === ${assetCount + 3}`, 'two new funds listed');
+  await waitFor(`location.hash === '#/assets' && ${ROWS} === ${assetCount + 3}`, 'two new funds listed');
   const ppfas = await evaluate(`[...document.querySelectorAll('a.list-row')].find((a) => a.textContent.includes('Parag Parikh'))?.getAttribute('href')`);
   assert(ppfas, 'Parag Parikh fund listed');
   await waitFor(`!document.querySelector('[data-action="refresh"]')?.disabled`, 'NAV refresh finished', 20_000);
@@ -299,22 +301,35 @@ try {
   await shot('cas-fund-detail', { full: true });
   await go('#/assets');
 
-  step('Import bonds from an NSDL statement, unticking one');
+  step('Import bonds and a demat fund from an NSDL statement, unticking one bond');
   await click('details.menu > summary');
   await chooseFile('[data-action="import-cas"]', fileURLToPath(new URL('../tests/fixtures/sample-nsdl.pdf', import.meta.url)));
   await waitFor(`document.querySelector('dialog[open] [name="password"]')`, 'password dialog', 15_000);
   await fill('dialog [name="password"]', 'ABCDE1234F');
   await click('dialog .btn-primary');
   await waitFor(`document.querySelector('dialog[open] .cas-list')`, 'bond review dialog', 15_000);
-  assert((await text('dialog h2')) === 'Import 7 Bonds', 'bond review title');
+  assert((await text('dialog h2')) === 'Import 1 Fund and 7 Bonds', `bond review title (${await text('dialog h2')})`);
   const bonds = await evaluate(`[...document.querySelectorAll('dialog .cas-item')].map((li) => li.textContent.replace(/\\s+/g, ' ').trim())`);
   assert(bonds.some((r) => r.includes('SGB 2020-21 SERIES VIII') && r.includes('2.5%') && r.includes('₹1,50,240') && r.includes('New')), `SGB listed (${JSON.stringify(bonds)})`);
-  await shot('bond-review');
+  assert(bonds[0].includes('INF000Y01AB2') && bonds[0].includes('250.500 units') && bonds[0].includes('₹20,103'), `demat fund listed first (${bonds[0]})`);
+  assert(await evaluate(`[...document.querySelectorAll('dialog .cas-heading')].map((h) => h.textContent).join() === 'Mutual Funds,Bonds'`), 'fund and bond headings');
+  await shot('bond-review', { full: true });
   await evaluate(`[...document.querySelectorAll('dialog .cas-item')].find((l) => l.textContent.includes('GOI LOAN')).querySelector('input').click()`);
   await click('dialog [data-ok]');
-  await waitFor(`document.querySelector('#toast.show')?.textContent.includes('Imported 6 bonds')`, 'bond import toast');
-  await waitFor(`location.hash === '#/assets' && document.querySelectorAll('a.list-row').length === ${assetCount + 9}`, 'six bonds added');
+  await waitFor(`document.querySelector('#toast.show')?.textContent.includes('Imported 6 bonds and 1 fund')`, 'bond import toast');
+  await waitFor(`location.hash === '#/assets' && ${ROWS} === ${assetCount + 10}`, 'six bonds and a fund added');
+  const fundGroup = `[...document.querySelectorAll('section.group')].find((s) => s.textContent.includes('Mutual Funds'))`;
+  assert(await evaluate(`${fundGroup}.textContent.includes('INF000Y01AB2') || ${fundGroup}.textContent.includes('EXAMPLE MUTUAL FUND')`), 'demat fund listed under Mutual Funds');
+
+  step('Long groups show five, then all');
+  const bondGroup = `[...document.querySelectorAll('section.group')].find((s) => s.querySelector('[data-action="toggle-group"]'))`;
+  assert(await evaluate(`${bondGroup}.querySelectorAll('a.list-row').length === 5`), 'a long group shows five');
+  assert(await evaluate(`${bondGroup}.querySelector('[data-action="toggle-group"]').textContent.trim() === 'Show all ' + ${bondGroup}.querySelector('.group-title .count').textContent`), 'Show all N');
+  await shot('assets-collapsed', { full: true });
+  await evaluate(`${bondGroup}.querySelector('[data-action="toggle-group"]').click()`);
+  await waitFor(`${bondGroup}.querySelectorAll('a.list-row').length === Number(${bondGroup}.querySelector('.group-title .count').textContent) && ${bondGroup}.querySelector('[data-action="toggle-group"]').textContent.includes('Show fewer')`, 'group expanded');
   assert(!(await text('main')).includes('GOI LOAN'), 'unticked bond not imported');
+  await shot('assets-expanded', { full: true });
   const sgb = await evaluate(`[...document.querySelectorAll('a.list-row')].find((a) => a.textContent.includes('SGB 2020-21'))?.getAttribute('href')`);
   await go(sgb);
   await waitFor(`document.querySelector('h1')?.textContent.includes('SGB 2020-21')`, 'imported bond detail');

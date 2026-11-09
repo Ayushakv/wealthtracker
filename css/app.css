@@ -343,6 +343,9 @@ body.gated .tabs { display: none; }
   cursor: pointer;
 }
 .row-button .icon { width: 20px; height: 20px; }
+.row-button .chev-down { transform: rotate(90deg); }
+.row-button .chev-up { transform: rotate(-90deg); }
+.group-title .count { font-variant-numeric: tabular-nums; letter-spacing: 0; opacity: 0.8; }
 .row-button:hover:not(:disabled), .row-link:hover, a.list-row:hover { background: var(--surface-hover); }
 .row-button.danger { color: var(--neg); }
 .row-button:disabled { color: var(--muted); opacity: 0.55; cursor: default; }
@@ -674,6 +677,8 @@ dialog.wide { width: min(560px, calc(100vw - 32px)); }
 .cas-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; }
 .cas-item + .cas-item, .cas-list > li + li > .cas-item { border-top: 0.5px solid var(--sep); }
 label.cas-item { cursor: pointer; }
+.cas-heading { padding: 10px 12px 4px; color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.cas-list > li + .cas-heading { border-top: 0.5px solid var(--sep); margin-top: 4px; }
 .cas-item input[type="checkbox"] { flex: none; width: 20px; height: 20px; margin: 0; accent-color: var(--accent); }
 .sheet .icon { vertical-align: -0.15em; }
 .sheet-actions .btn { height: 42px; min-width: 96px; }

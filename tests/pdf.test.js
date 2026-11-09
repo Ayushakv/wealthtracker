@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { linesFromItems, pdfLines, pdfRows, PDFPasswordError } from '../js/ui/pdf.js';
 import { parseCAS } from '../js/core/cas.js';
-import { isDepositoryStatement, parseDematBonds } from '../js/core/demat.js';
+import { isDepositoryStatement, parseDemat } from '../js/core/demat.js';
 
 const fixture = async (name = 'sample-cas.pdf') => (await readFile(new URL(`./fixtures/${name}`, import.meta.url))).buffer;
 
@@ -24,12 +24,15 @@ test('a password-protected CAS PDF is read and parsed', async () => {
   );
 });
 
-test('bonds are read from a password-protected NSDL statement', async () => {
+test('bonds and demat funds are read from a password-protected NSDL statement', async () => {
   const rows = await pdfRows(await fixture('sample-nsdl.pdf'), 'ABCDE1234F');
   assert.ok(isDepositoryStatement(rows.map((r) => r.text)));
   const d = (y, m, day) => new Date(`${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00+05:30`).getTime();
+  const statement = parseDemat(rows);
+  // Units stacked by balance; the lock-in list after the bonds is left out.
+  assert.deepEqual(statement.funds.map((f) => [f.account, f.isin, f.name, f.units, f.nav, f.value]), [['1208180087654321', 'INF000Y01AB2', 'EXAMPLE MUTUAL FUND', 250.5, 80.25, 20102.63]]);
   assert.deepEqual(
-    parseDematBonds(rows).holdings.map((h) => [h.account, h.isin, h.name, h.value, h.coupon, h.maturity]),
+    statement.holdings.map((h) => [h.account, h.isin, h.name, h.value, h.coupon, h.maturity]),
     [
       ['IN30009512345678', 'IN0020200195', 'SGB 2020-21 SERIES VIII', 150240, 2.5, d(2028, 11, 10)],
       ['IN30009512345678', 'IN0020230085', 'GOI LOAN 7.18% 2033', 101250, 7.18, d(2033, 8, 14)],

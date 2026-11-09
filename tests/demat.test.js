@@ -4,7 +4,7 @@ import { createAsset } from '../js/core/assets.js';
 import { date as d } from '../js/core/calendar.js';
 import { CASError } from '../js/core/cas.js';
 import { Category } from '../js/core/categories.js';
-import { bondFromHolding, isDebtISIN, isDepositoryStatement, parseDematBonds, parseStatementDate, planBondImport } from '../js/core/demat.js';
+import { bondFromHolding, isDebtISIN, isDepositoryStatement, parseDemat, parseStatementDate, planBondImport } from '../js/core/demat.js';
 import { applyDraft, draftFromAsset, newDraft, validateDraft } from '../js/core/draft.js';
 
 /**
@@ -63,6 +63,13 @@ const NSDL = page([
   L('', 'RED PRN PRT PTC SR A1 LOA-RD 28-09-2027'),
   L('', '', '0.000  0.000  0.000'),
   'Sub Total  2,01,840.00',
+  // A fund held in the demat account: units stacked by balance (current, safekeep, pledged), the NAV and the value.
+  'Mutual Funds (M)',
+  L('ISIN', 'ISIN Description', 'Current Bal.  Safekeep Bal.  Pledged Bal.  NAV  Value (₹)'),
+  L('', '', '250.500  0.000  0.000'),
+  L('INF000Y01AB2', 'EXAMPLE MUTUAL FUND', '0.000  250.500  0.000', '80.25', '20,102.63'),
+  L('', '', '0.000  0.000  0.000'),
+  'Sub Total  20,102.63',
   'Corporate Bonds (C)',
   L('ISIN', 'SECURITY', 'Current Bal.  Free Bal.  Lent Bal.  Market Price / Face Value  Value (₹)'),
   L('', 'SAMPLE CREDIT CAPITAL PRIVATE LTD#12% SEC GRT', '5.000  0.000  0.000'),
@@ -74,7 +81,7 @@ const NSDL = page([
   L('', 'RD-24052027', '0.000  0.000  0.000'),
   'Sub Total  1,48,580.00',
   // A lock-in list after the bonds: fund units, not bonds.
-  L('INF740K01OK1', 'DSP MUTUAL FUND', 'LOCK-IN', '23-Sep-2027', 'ELSS2005', '31.33'),
+  L('INF000Y01AB2', 'EXAMPLE MUTUAL FUND', 'LOCK-IN', '23-Sep-2027', 'ELSS2005', '31.33'),
   'Transactions for the period from 01-Sep-2026 to 30-Sep-2026',
   'DP ID : IN300095 Client ID: 12345678',
   'ISIN : INE000A07AA1 - EXAMPLE FINANCE LIMITED',
@@ -123,7 +130,7 @@ describe('NSDL/CDSL bond import', () => {
   });
 
   test('NSDL and CDSL tables: wrapped names, coupons and maturities; shares, funds and transactions ignored', () => {
-    const s = parseDematBonds(NSDL);
+    const s = parseDemat(NSDL);
     assert.equal(s.asOf, d(2026, 9, 30));
     assert.deepEqual(
       s.holdings.map((h) => [h.account, h.isin, h.name, h.value, h.coupon, h.maturity]),
@@ -142,19 +149,39 @@ describe('NSDL/CDSL bond import', () => {
     );
   });
 
+  test('funds in a demat account: units, NAV and value; folio funds and lock-in lists are left out', () => {
+    assert.deepEqual(
+      parseDemat(NSDL).funds.map((f) => [f.account, f.isin, f.name, f.units, f.nav, f.value]),
+      [['1208180087654321', 'INF000Y01AB2', 'EXAMPLE MUTUAL FUND', 250.5, 80.25, 20102.63]],
+    );
+    assert.deepEqual(parseDemat(CDSL).funds, []);
+  });
+
+  test('a statement with only demat funds is imported', () => {
+    const rows = page([
+      'DP ID : 12081800 Client ID: 87654321',
+      'Mutual Funds (M)',
+      L('ISIN', 'ISIN Description', 'Current Bal.  Safekeep Bal.  Pledged Bal.  NAV  Value (₹)'),
+      L('INF000Y01AB2', 'EXAMPLE MUTUAL FUND', '100.000  0.000  0.000', '50.00', '5,000.00'),
+    ]);
+    const s = parseDemat(rows);
+    assert.deepEqual(s.holdings, []);
+    assert.deepEqual(s.funds.map((f) => [f.units, f.nav, f.value]), [[100, 50, 5000]]);
+  });
+
   test('a table split across pages keeps each name with its own bond', () => {
     const rows = [
       ...page(['DP ID : IN300095 Client ID: 12345678', 'Corporate Bonds (C)', L('ISIN', 'Company Name', 'Value'), L('', 'FIRST FINANCE'), L('INE000D07AA7', 'LIMITED', '12-Jan-2028', '10,000.00'), L('', 'Fixed Interest Bonds')], 1),
       ...page(['Page 2', 'Consolidated Account Statement', L('ISIN', 'Company Name', 'Value'), L('', 'SECOND FINANCE LIMITED'), L('INE000E07AA5', '', '12-Feb-2028', '20,000.00'), L('', 'Fixed Interest Bonds'), 'Sub Total  30,000.00'], 2),
     ];
-    assert.deepEqual(parseDematBonds(rows).holdings.map((h) => [h.isin, h.name, h.value]), [
+    assert.deepEqual(parseDemat(rows).holdings.map((h) => [h.isin, h.name, h.value]), [
       ['INE000D07AA7', 'FIRST FINANCE LIMITED', 10000],
       ['INE000E07AA5', 'SECOND FINANCE LIMITED', 20000],
     ]);
   });
 
   test('CDSL: BO ID account, coupon from the description', () => {
-    const s = parseDematBonds(CDSL);
+    const s = parseDemat(CDSL);
     assert.equal(s.asOf, d(2026, 9, 30));
     assert.deepEqual(
       s.holdings.map((h) => [h.isin, h.name, h.value, h.coupon, h.account]),
@@ -181,7 +208,7 @@ describe('NSDL/CDSL bond import', () => {
       'Page 1 of 4',
     ]);
     assert.deepEqual(
-      parseDematBonds(rows).holdings.map((h) => [h.name, h.coupon, h.maturity, h.value]),
+      parseDemat(rows).holdings.map((h) => [h.name, h.coupon, h.maturity, h.value]),
       [
         ['EXAMPLE HOUSING FINANCE LIMITED SR-X 8.25% NCD', 8.25, null, 25312.5],
         ['SGB 2020-21 SERIES VIII', 2.5, d(2028, 11, 10), 150240],
@@ -193,12 +220,12 @@ describe('NSDL/CDSL bond import', () => {
 
   test('a statement with only shares explains what is imported', () => {
     const sharesOnly = CDSL.filter((r) => !/^IN(0|E848)/.test(r.text));
-    assert.throws(() => parseDematBonds(sharesOnly), (e) => e instanceof CASError && /No bonds/.test(e.message));
+    assert.throws(() => parseDemat(sharesOnly), (e) => e instanceof CASError && /No bonds/.test(e.message));
   });
 
   test('plan: re-imports match by ISIN + demat account; hand-entered bonds are left alone', () => {
     const now = d(2026, 10, 1);
-    const s = parseDematBonds(CDSL);
+    const s = parseDemat(CDSL);
     const imported = createAsset({ category: Category.bonds, name: 'SGB', isin: 'IN0020210152', folio: '1208160012345678', investedAmount: 60000, currentValuation: 70000 }, now);
     const sold = createAsset({ category: Category.bonds, name: 'Old NCD', isin: 'INE000X07AA1', folio: '1208160012345678', currentValuation: 1000 }, now);
     const otherAccount = createAsset({ category: Category.bonds, name: 'Elsewhere', isin: 'INE000X07BB1', folio: 'IN30009512345678' }, now);
@@ -213,7 +240,7 @@ describe('NSDL/CDSL bond import', () => {
 
   test('new bonds take the market value; updates keep the cost and the interest settings', () => {
     const now = d(2026, 10, 1);
-    const s = parseDematBonds(NSDL);
+    const s = parseDemat(NSDL);
     const fresh = bondFromHolding({ holding: s.holdings[0], existing: null }, now);
     assert.equal(fresh.category, Category.bonds);
     assert.equal(fresh.name, 'SGB 2020-21 SERIES VIII');
@@ -238,7 +265,7 @@ describe('NSDL/CDSL bond import', () => {
 
   test('market-valued bonds edit and save without a start date', () => {
     const now = d(2026, 10, 1);
-    const bond = bondFromHolding({ holding: parseDematBonds(CDSL).holdings[1], existing: null }, now);
+    const bond = bondFromHolding({ holding: parseDemat(CDSL).holdings[1], existing: null }, now);
     const draft = draftFromAsset(bond, now);
     assert.equal(draft.hasStartDate, false);
     assert.equal(validateDraft(draft), null);

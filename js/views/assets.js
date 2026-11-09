@@ -6,8 +6,11 @@ import { icon } from '../ui/icons.js';
 import { importCAS } from './casImport.js';
 import { emptyState, pageHead, signClass } from './common.js';
 
-/** Category filter survives navigating into an asset and back. */
+/** Category filter survives navigating into an asset and back, and so do expanded groups. */
 let filter = '';
+const expanded = new Set();
+/** Long groups show this many assets until expanded (a group of one more than this shows in full). */
+const PREVIEW = 5;
 
 export function assetSubtitle(a) {
   const join = (...parts) => parts.filter(Boolean).join(' · ');
@@ -82,15 +85,24 @@ export const assetsView = {
       const c = visible[0];
       return html`${head}${emptyState({ iconName: c.icon, title: `No ${c.short} Assets` })}`;
     }
-    return html`${head}${sections.map(
-      ({ c, items }) => html`<section class="group">
+    return html`${head}${sections.map(({ c, items }) => {
+      // Picking one category in the filter shows all of it.
+      const long = !filter && items.length > PREVIEW + 1;
+      const open = !long || expanded.has(c.slug);
+      return html`<section class="group">
         <h2 class="group-title split">
-          <span>${icon(c.icon)} ${c.raw}</span>
+          <span>${icon(c.icon)} ${c.raw}${long ? html` <span class="count">${items.length}</span>` : ''}</span>
           <span class="num">${inrCompact(items.filter(countsTowardsNetWorth).reduce((s, a) => s + a.currentValuation, 0))}</span>
         </h2>
-        <ul class="group-body plain-list">${items.map(assetRow)}</ul>
-      </section>`,
-    )}`;
+        <ul class="group-body plain-list">
+          ${(open ? items : items.slice(0, PREVIEW)).map(assetRow)}
+          ${long
+            ? html`<li><button class="row row-button" data-action="toggle-group" data-group="${c.slug}" aria-expanded="${String(open)}">
+                ${icon('chevron', open ? 'chev-up' : 'chev-down')}${open ? 'Show fewer' : `Show all ${items.length}`}</button></li>`
+            : ''}
+        </ul>
+      </section>`;
+    })}`;
   },
 
   mount(root) {
@@ -105,6 +117,11 @@ export const assetsView = {
   },
 
   actions: {
+    'toggle-group'(el, ctx) {
+      const slug = el.dataset.group;
+      if (!expanded.delete(slug)) expanded.add(slug);
+      ctx.rerender();
+    },
     'import-cas'(el, ctx) {
       el.closest('details').open = false;
       return importCAS(ctx);
