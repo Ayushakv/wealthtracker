@@ -1,11 +1,11 @@
-import { byName, countsTowardsNetWorth, gain, gainFraction } from '../core/assets.js';
+import { byName, countsTowardsNetWorth } from '../core/assets.js';
 import { CATEGORIES, Category, categoryInfo } from '../core/categories.js';
 import { INSTRUMENT_ORDER } from '../core/demat.js';
-import { formatDate, inr, inrCompact, number, percent, plainNumber } from '../core/format.js';
+import { formatDate, inr, inrCompact, number, plainNumber } from '../core/format.js';
 import { html } from '../ui/html.js';
 import { icon } from '../ui/icons.js';
 import { importCAS } from './casImport.js';
-import { emptyState, pageHead, signClass } from './common.js';
+import { emptyState, pageHead } from './common.js';
 
 /** Category filter survives navigating into an asset and back, and so do expanded groups. */
 let filter = '';
@@ -35,9 +35,7 @@ export function assetSubtitle(a) {
 function assetRow(a) {
   let trailing = '';
   if (countsTowardsNetWorth(a)) {
-    const g = gainFraction(a);
-    trailing = html`<span class="num">${inr(a.currentValuation)}</span>
-      ${g != null ? html`<span class="num small ${signClass(gain(a))}">${gain(a) >= 0 ? '+' : ''}${percent(g)}</span>` : ''}`;
+    trailing = html`<span class="num">${inr(a.currentValuation)}</span>`;
   } else if (a.policySumAssured != null) {
     trailing = html`<span class="muted">Cover ${inrCompact(a.policySumAssured)}</span>`;
   }

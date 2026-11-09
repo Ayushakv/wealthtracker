@@ -1,7 +1,7 @@
 // Offline support: every app file is cached on install and served cache-first.
 // The PDF reader (vendor/) and ISIN map (data/) are large and only needed for CAS imports, so they are
 // cached the first time they are used instead. Bump VERSION whenever any of these files change.
-const VERSION = 'wt-v10';
+const VERSION = 'wt-v11';
 const LAZY = /\/(vendor|data)\//;
 
 const PRECACHE = [
