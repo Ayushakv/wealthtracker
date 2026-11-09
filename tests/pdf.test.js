@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { linesFromItems, pdfLines, PDFPasswordError } from '../js/ui/pdf.js';
+import { linesFromItems, pdfLines, pdfRows, PDFPasswordError } from '../js/ui/pdf.js';
 import { parseCAS } from '../js/core/cas.js';
 import { isDepositoryStatement, parseDematBonds } from '../js/core/demat.js';
 
@@ -25,14 +25,21 @@ test('a password-protected CAS PDF is read and parsed', async () => {
 });
 
 test('bonds are read from a password-protected NSDL statement', async () => {
-  const lines = await pdfLines(await fixture('sample-nsdl.pdf'), 'ABCDE1234F');
-  assert.ok(isDepositoryStatement(lines));
+  const rows = await pdfRows(await fixture('sample-nsdl.pdf'), 'ABCDE1234F');
+  assert.ok(isDepositoryStatement(rows.map((r) => r.text)));
+  const d = (y, m, day) => new Date(`${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00+05:30`).getTime();
   assert.deepEqual(
-    parseDematBonds(lines).holdings.map((h) => [h.isin, h.name, h.value, h.coupon, h.account]),
+    parseDematBonds(rows).holdings.map((h) => [h.account, h.isin, h.name, h.value, h.coupon, h.maturity]),
     [
-      ['IN0020200195', 'SGB 2020-21 SERIES VIII', 150240, 2.5, 'IN30009512345678'],
-      ['IN0020230085', 'GOI LOAN 7.18% 2033', 101250, 7.18, 'IN30009512345678'],
-      ['INE001A07RU8', 'EXAMPLE HOUSING FINANCE LIMITED SR-X 8.25% NCD', 25312.5, 8.25, 'IN30009512345678'],
+      ['IN30009512345678', 'IN0020200195', 'SGB 2020-21 SERIES VIII', 150240, 2.5, d(2028, 11, 10)],
+      ['IN30009512345678', 'IN0020230085', 'GOI LOAN 7.18% 2033', 101250, 7.18, d(2033, 8, 14)],
+      // NSDL's corporate bond table: names centred on the ISIN's line, a frequency column, no coupon.
+      ['IN30009512345678', 'INE001A07RU8', 'EXAMPLE HOUSING FINANCE LIMITED', 25312.5, null, d(2028, 3, 15)],
+      ['IN30009512345678', 'INE002B07AB3', 'SAMPLE CREDIT CAPITAL PRIVATE LIMITED', 50000, 12, d(2027, 9, 29)],
+      // A CDSL account in the same statement: three-line securities with "#coupon" and "RD <maturity>".
+      ['1208180087654321', 'INE003C15012', 'EXAMPLE TRUST MAY 2025', 201840, 11.4, d(2027, 9, 28)],
+      ['1208180087654321', 'INE002B07AB3', 'SAMPLE CREDIT CAPITAL PRIVATE LTD 12% Sep 2027', 49130, 12, d(2027, 9, 29)],
+      ['1208180087654321', 'INE002B07AC1', 'SAMPLE CREDIT CAPITAL PRIVATE LTD 13% May 2027', 99450, 13, d(2027, 5, 24)],
     ],
   );
 });

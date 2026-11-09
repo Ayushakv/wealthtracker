@@ -20,6 +20,12 @@
   td, th { padding: 0.6mm 3mm 0.6mm 0; text-align: left; font-weight: normal; vertical-align: top; }
   td.n { text-align: right; }
   td.desc { width: 60mm; }
+  table.mid td { vertical-align: middle; padding-top: 1.6mm; padding-bottom: 1.6mm; }
+  td.name { width: 36mm; }
+  td.freq { width: 16mm; text-align: center; }
+  td.date { white-space: nowrap; padding-left: 4mm; }
+  td.sec { width: 52mm; }
+  .kind { display: block; font-style: italic; font-size: 7.5pt; }
   .gap { margin-left: 10mm; }
 </style>
 </head>
@@ -46,9 +52,11 @@
 </table>
 
 <h2>Corporate Bonds (C)</h2>
-<table>
-  <tr><th>ISIN</th><th>Description</th><th>Face Value</th><th>No. of Bonds</th><th>Market Price</th><th>Value (₹)</th></tr>
-  <tr><td>INE001A07RU8</td><td class="desc">EXAMPLE HOUSING FINANCE LIMITED SR-X 8.25% NCD</td><td class="n">1,000.00</td><td class="n">25</td><td class="n">1,012.50</td><td class="n">25,312.50</td></tr>
+<!-- NSDL lays bonds out with the name wrapped above and below the ISIN's line, and only a frequency in the coupon column. -->
+<table class="mid">
+  <tr><th>ISIN</th><th>Company Name</th><th>Coupon Rate/ Frequency</th><th>Maturity Date</th><th>No. of Bonds</th><th>Face Value</th><th>Market Price</th><th>Value (₹)</th></tr>
+  <tr><td>INE001A07RU8</td><td class="name">EXAMPLE HOUSING FINANCE LIMITED<span class="kind">Fixed Interest Bonds</span></td><td class="freq">QUARTERLY</td><td class="date">15-Mar-2028</td><td class="n">25</td><td class="n">1,000.00</td><td class="n">1,012.50</td><td class="n">25,312.50</td></tr>
+  <tr><td>INE002B07AB3</td><td class="name">SAMPLE CREDIT CAPITAL PRIVATE LIMITED<span class="kind">Fixed Interest Bonds</span></td><td class="freq">Twelve times a year</td><td class="date">29-Sep-2027</td><td class="n">5</td><td class="n">10,000.00</td><td class="n">Not Available</td><td class="n">50,000.00</td></tr>
 </table>
 
 <h2>Mutual Fund Folios (F)</h2>
@@ -57,11 +65,32 @@
   <tr><td>INF179K01UT0</td><td>HDFC FLEXI CAP FUND - DIRECT GROWTH</td><td class="n">112.345</td><td class="n">2,143.156</td><td class="n">2,40,770.54</td></tr>
 </table>
 
+<h2>CDSL Demat Account</h2>
+<p>EXAMPLE SECURITIES PRIVATE LIMITED</p>
+<p>DP ID : 12081800<span class="gap">Client ID: 87654321</span></p>
+
+<h2>Securitised Instruments (S)</h2>
+<!-- CDSL lists the security as "ISSUER#COUPON TERMS … RD <maturity>", with three stacked balances per column. -->
+<table class="mid">
+  <tr><th>ISIN</th><th>SECURITY</th><th>Current / Free / Lent Bal.</th><th>Safekeep / Locked In / Pledge Bal.</th><th>Market Price / Face Value</th><th>Value (₹)</th></tr>
+  <tr><td>INE003C15012</td><td class="sec">EXAMPLE TRUST MAY 2025#11.40% SEC TAX NCUM RTD RED PRN PRT PTC SR A1 LOA-RD 28-09-2027</td><td class="n">2.000<br>2.000<br>0.000</td><td class="n">0.000<br>0.000<br>0.000</td><td class="n">1,00,920.00</td><td class="n">2,01,840.00</td></tr>
+</table>
+
+<h2>Corporate Bonds (C)</h2>
+<table class="mid">
+  <tr><th>ISIN</th><th>SECURITY</th><th>Current / Free / Lent Bal.</th><th>Safekeep / Locked In / Pledge Bal.</th><th>Market Price / Face Value</th><th>Value (₹)</th></tr>
+  <tr><td>INE002B07AB3</td><td class="sec">SAMPLE CREDIT CAPITAL PRIVATE LTD#12% SEC GRT SNR TAX NCUM RTD RED PRN PRT NCD SR A PP-RD 29-09-2027</td><td class="n">5.000<br>5.000<br>0.000</td><td class="n">0.000<br>0.000<br>0.000</td><td class="n">9,826.00</td><td class="n">49,130.00</td></tr>
+  <tr><td>INE002B07AC1</td><td class="sec">SAMPLE CREDIT CAPITAL PRIVATE LTD#13% SEC GRT SNR TAX NCUM RAT RED PN PT NCD PP-RD-24052027</td><td class="n">10.000<br>10.000<br>0.000</td><td class="n">0.000<br>0.000<br>0.000</td><td class="n">9,945.00</td><td class="n">99,450.00</td></tr>
+  <tr><td colspan="4" class="n">Sub Total</td><td></td><td class="n">1,48,580.00</td></tr>
+</table>
+
 <h2>Transactions for the period from 01-Sep-2026 to 30-Sep-2026</h2>
-<p>INE001A07RU8 EXAMPLE HOUSING FINANCE LIMITED SR-X 8.25% NCD</p>
+<p>DP ID : IN300095<span class="gap">Client ID: 12345678</span></p>
+<p>ISIN : INE001A07RU8 - EXAMPLE HOUSING FINANCE LIMITED</p>
 <table>
   <tr><th>Date</th><th>Particulars</th><th>Opening</th><th>Credit</th><th>Debit</th><th>Closing</th></tr>
   <tr><td>05-Sep-2026</td><td>By Purchase</td><td class="n">0</td><td class="n">25</td><td class="n">0</td><td class="n">25</td></tr>
 </table>
+<p>***End of Statement***</p>
 </body>
 </html>

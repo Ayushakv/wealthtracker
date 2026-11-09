@@ -4,7 +4,7 @@ import { formatDate, inr, number, plainNumber } from '../core/format.js';
 import { hideToast, pickFile, showDialog, toast } from '../ui/dom.js';
 import { html } from '../ui/html.js';
 import { icon } from '../ui/icons.js';
-import { pdfLines, PDFPasswordError } from '../ui/pdf.js';
+import { pdfRows, PDFPasswordError } from '../ui/pdf.js';
 
 export const CAS_HELP =
   'Mutual funds: request a Detailed Consolidated Account Statement on camsonline.com or kfintech.com; it arrives by email as a PDF locked with the password you choose. Bonds, SGBs and NCDs in a demat account: use the monthly NSDL or CDSL CAS emailed to you (usually locked with your PAN). The PDF is read on this device and never uploaded.';
@@ -45,7 +45,7 @@ async function readStatement(file) {
   for (;;) {
     toast('Reading statement…', { duration: Infinity });
     try {
-      return await pdfLines(data, password);
+      return await pdfRows(data, password);
     } catch (e) {
       if (!(e instanceof PDFPasswordError)) throw e;
       hideToast();
@@ -145,8 +145,8 @@ function bondReviewDialog(statement, rows, missing) {
   );
 }
 
-async function importBonds(lines, { store, navigate }) {
-  const statement = parseDematBonds(lines);
+async function importBonds(pdf, { store, navigate }) {
+  const statement = parseDematBonds(pdf);
   const now = Date.now();
   const { items, missing } = planBondImport(statement, store.assets);
   const rows = items.filter((item) => item.action !== 'skip').map((item) => ({ item, asset: bondFromHolding(item, now) }));
@@ -166,10 +166,11 @@ export async function importCAS({ store, navigate }) {
   const file = await pickFile('.pdf,application/pdf');
   if (!file) return;
   try {
-    const lines = await readStatement(file);
-    if (!lines) return;
+    const pdf = await readStatement(file);
+    if (!pdf) return;
+    const lines = pdf.map((r) => r.text);
     if (isDepositoryStatement(lines)) {
-      await importBonds(lines, { store, navigate });
+      await importBonds(pdf, { store, navigate });
       return;
     }
     const statement = parseCAS(lines);

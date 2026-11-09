@@ -292,14 +292,14 @@ try {
   await fill('dialog [name="password"]', 'ABCDE1234F');
   await click('dialog .btn-primary');
   await waitFor(`document.querySelector('dialog[open] .cas-list')`, 'bond review dialog', 15_000);
-  assert((await text('dialog h2')) === 'Import 3 Bonds', 'bond review title');
+  assert((await text('dialog h2')) === 'Import 7 Bonds', 'bond review title');
   const bonds = await evaluate(`[...document.querySelectorAll('dialog .cas-item')].map((li) => li.textContent.replace(/\\s+/g, ' ').trim())`);
   assert(bonds.some((r) => r.includes('SGB 2020-21 SERIES VIII') && r.includes('2.5%') && r.includes('₹1,50,240') && r.includes('New')), `SGB listed (${JSON.stringify(bonds)})`);
   await shot('bond-review');
   await evaluate(`[...document.querySelectorAll('dialog .cas-item')].find((l) => l.textContent.includes('GOI LOAN')).querySelector('input').click()`);
   await click('dialog [data-ok]');
-  await waitFor(`document.querySelector('#toast.show')?.textContent.includes('Imported 2 bonds')`, 'bond import toast');
-  await waitFor(`location.hash === '#/assets' && document.querySelectorAll('a.list-row').length === ${assetCount + 5}`, 'two bonds added');
+  await waitFor(`document.querySelector('#toast.show')?.textContent.includes('Imported 6 bonds')`, 'bond import toast');
+  await waitFor(`location.hash === '#/assets' && document.querySelectorAll('a.list-row').length === ${assetCount + 9}`, 'six bonds added');
   assert(!(await text('main')).includes('GOI LOAN'), 'unticked bond not imported');
   const sgb = await evaluate(`[...document.querySelectorAll('a.list-row')].find((a) => a.textContent.includes('SGB 2020-21'))?.getAttribute('href')`);
   await go(sgb);

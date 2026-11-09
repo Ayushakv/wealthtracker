@@ -7,47 +7,99 @@ import { Category } from '../js/core/categories.js';
 import { bondFromHolding, isDebtISIN, isDepositoryStatement, parseDematBonds, parseStatementDate, planBondImport } from '../js/core/demat.js';
 import { applyDraft, draftFromAsset, newDraft, validateDraft } from '../js/core/draft.js';
 
-// Text lines as pdf.js hands them over (cells separated by tabs). Synthetic data, laid out like the NSDL and CDSL statements.
-const NSDL = `
-NSDL Consolidated Account Statement
-Statement for the period from 01-Sep-2026 to 30-Sep-2026
-Consolidated Portfolio Valuation
-NSDL Demat Account	DP Name: SOME BROKING LIMITED
-DP ID: IN300095	Client ID: 12345678
-Equities (E)
-ISIN	Stock Symbol	Company Name	Face Value (₹)	No. of Shares	Market Price (₹)	Value (₹)
-INE002A01018	RELIANCE	RELIANCE INDUSTRIES LIMITED	10.00	50	2,950.10	1,47,505.00
-Government Securities (G)
-ISIN	Security	Coupon Rate	Maturity Date	Face Value	No. of Units	Market Price	Value (₹)
-IN0020200195	SGB 2020-21 SERIES VIII	2.50%	10-Nov-2028	1.00	20	7,512.00	1,50,240.00
-IN0020230085	GOI LOAN 7.18% 2033	7.18%	14-Aug-2033	100.00	1,000	101.25	1,01,250.00
-Corporate Bonds (C)
-ISIN	Description	Face Value	No. of Bonds	Market Price	Value (₹)
-INE001A07RU8	HOUSING DEVELOPMENT FINANCE CORPORATION LIMITED SR-X NCD
-1,000.00	25	1,012.50	25,312.50
-Mutual Fund Folios (F)
-INF179K01UT0	HDFC FLEXI CAP FUND - DIRECT GROWTH	112.345	2,143.156	2,40,770.54
-Transactions for the period from 01-Sep-2026 to 30-Sep-2026
-INE001A07RU8	HOUSING DEVELOPMENT FINANCE CORPORATION LIMITED SR-X NCD
-05-Sep-2026	By Purchase	0	25	0	25
-`.trim().split('\n');
+/**
+ * Lays out statement lines the way pdfRows hands them over: one line every 8pt down the page (an empty string adds a
+ * gap, like the padding between table rows), cells split at two or more spaces, 4pt per character across.
+ * Synthetic data, laid out like the NSDL and CDSL statements.
+ */
+function page(lines, n = 1) {
+  return lines.flatMap((line, i) => {
+    const cells = [...line.matchAll(/\S+(?: \S+)*/g)].map((m) => ({ x: m.index * 4, end: (m.index + m[0].length) * 4, h: 7, text: m[0] }));
+    return cells.length ? [{ page: n, y: 800 - i * 8, text: cells.map((c) => c.text).join('\t'), cells }] : [];
+  });
+}
+/** A table line: the ISIN, the description column, then the other columns. */
+const L = (isin = '', description = '', ...rest) => `${isin.padEnd(14)}${description.padEnd(64)}${rest.join('  ')}`.trimEnd();
 
-const CDSL = `
-CDSL	Central Depository Services (India) Limited
-Consolidated Account Statement
-For the period 01-09-2026 to 30-09-2026
-BO ID: 1208160012345678	DP Name: SOME INVEST TECH
-HOLDING STATEMENT AS ON 30-09-2026
-ISIN	Security	Current Bal	Free Bal	Pledge Bal	Market Price / Face Value	Value
-IN0020210152	SGBDEC2512 - 2.50% SOVEREIGN GOLD BONDS 2029 SR-VIII	10.000	10.000	0.000	7,512.00	75,120.00
-INE848E07AB4	9.10% NCD NHPC SERIES 2030	50.000	50.000	0.000	1,000.00	50,000.00
-INE009A01021	INFOSYS LIMITED - EQUITY SHARES	10.000	10.000	0.000	1,850.00	18,500.00
-`.trim().split('\n');
+const NSDL = page([
+  'NSDL Consolidated Account Statement',
+  'Statement for the period from 01-Sep-2026 to 30-Sep-2026',
+  'Consolidated Portfolio Valuation',
+  'NSDL Demat Account  DP Name: SOME BROKING LIMITED',
+  'DP ID: IN300095  Client ID: 12345678',
+  'Equities (E)',
+  L('ISIN', 'Company Name', 'Face Value (₹)  No. of Shares  Market Price (₹)  Value (₹)'),
+  L('INE002A01018', 'RELIANCE INDUSTRIES LIMITED', '10.00', '50', '2,950.10', '1,47,505.00'),
+  'Government Securities (G)',
+  L('ISIN', 'Security', 'Coupon Rate  Maturity Date  Face Value  No. of Units  Market Price  Value (₹)'),
+  L('IN0020200195', 'SGB 2020-21 SERIES VIII', '2.50%', '10-Nov-2028', '1.00', '20', '7,512.00', '1,50,240.00'),
+  L('IN0020230085', 'GOI LOAN 7.18% 2033', '7.18%', '14-Aug-2033', '100.00', '1,000', '101.25', '1,01,250.00'),
+  'Corporate Bonds (C)',
+  L('ISIN', 'Company Name', 'Coupon Rate/  Maturity Date  No. of Bonds  Face Value  Market Price  Value (₹)'),
+  L('', '', 'Frequency'),
+  // The name is centred on the ISIN's line, wrapped above and below it, with the bond's kind in italics underneath.
+  L('', 'EXAMPLE FINANCE LIMITED'),
+  L('INE000A07AA1', '', 'QUARTERLY', '04-Aug-2028', '2', '10,000.00', '10,000.00', '20,000.00'),
+  L('', 'Fixed Interest Bonds'),
+  '',
+  L('', 'SAMPLE CREDIT CAPITAL PRIVATE', 'Twelve times a'),
+  L('INE000B07AB2', 'LIMITED', '29-Sep-2027', '5', '10,000.00', 'Not Available', '50,000.00'),
+  L('', 'Fixed Interest Bonds', 'year'),
+  '',
+  L('', 'SAMPLE CREDIT CAPITAL PRIVATE', 'Twelve times a'),
+  L('INE000B07AC0', 'LIMITED', '26-Apr-2028', '2', '10,000.00', '10,000.00', '20,000.00'),
+  L('', 'Fixed Interest Bonds', 'year'),
+  'Sub Total  90,000.00',
+  'Mutual Fund Folios (F)',
+  L('INF179K01UT0', 'HDFC FLEXI CAP FUND - DIRECT GROWTH', '112.345', '2,143.156', '2,40,770.54'),
+  'CDSL Demat Account',
+  'DP ID : 12081800 Client ID: 87654321',
+  'Securitised Instruments (S)',
+  L('ISIN', 'SECURITY', 'Current Bal.  Free Bal.  Lent Bal.  Market Price / Face Value  Value (₹)'),
+  // Three balances stacked in each column; the security reads "ISSUER#COUPON TERMS … RD <maturity>".
+  L('', '', '2.000  0.000  0.000'),
+  L('', 'EXAMPLE TRUST MAY 2025#11.40% SEC TAX NCUM RTD'),
+  L('INE000C15011', '', '2.000  0.000  0.000', '1,00,920.00', '2,01,840.00'),
+  L('', 'RED PRN PRT PTC SR A1 LOA-RD 28-09-2027'),
+  L('', '', '0.000  0.000  0.000'),
+  'Sub Total  2,01,840.00',
+  'Corporate Bonds (C)',
+  L('ISIN', 'SECURITY', 'Current Bal.  Free Bal.  Lent Bal.  Market Price / Face Value  Value (₹)'),
+  L('', 'SAMPLE CREDIT CAPITAL PRIVATE LTD#12% SEC GRT', '5.000  0.000  0.000'),
+  L('INE000B07AB2', 'SNR TAX NCUM RTD RED PRN PRT NCD SR A PP-RD', '5.000  0.000  0.000', '9,826.00', '49,130.00'),
+  L('', '29-09-2027', '0.000  0.000  0.000'),
+  '',
+  L('', 'SAMPLE CREDIT CAPITAL PRIVATE LTD#13%SEC GRT SNR', '10.000  0.000  0.000'),
+  L('INE000B07AD8', 'TAX NCUM RAT RED PN PT NCD PP-', '10.000  0.000  0.000', '9,945.00', '99,450.00'),
+  L('', 'RD-24052027', '0.000  0.000  0.000'),
+  'Sub Total  1,48,580.00',
+  // A lock-in list after the bonds: fund units, not bonds.
+  L('INF740K01OK1', 'DSP MUTUAL FUND', 'LOCK-IN', '23-Sep-2027', 'ELSS2005', '31.33'),
+  'Transactions for the period from 01-Sep-2026 to 30-Sep-2026',
+  'DP ID : IN300095 Client ID: 12345678',
+  'ISIN : INE000A07AA1 - EXAMPLE FINANCE LIMITED',
+  '05-Sep-2026  By Purchase  0  2  0  2',
+  L('INE000A07AA1', 'EXAMPLE FINANCE LIMITED', '2', '0', '2'),
+  '***End of Statement***',
+]);
+
+const CDSL = page([
+  'CDSL  Central Depository Services (India) Limited',
+  'Consolidated Account Statement',
+  'For the period 01-09-2026 to 30-09-2026',
+  'BO ID: 1208160012345678  DP Name: SOME INVEST TECH',
+  'HOLDING STATEMENT AS ON 30-09-2026',
+  L('ISIN', 'Security', 'Current Bal  Free Bal  Pledge Bal  Market Price / Face Value  Value'),
+  L('IN0020210152', 'SGBDEC2512 - 2.50% SOVEREIGN GOLD BONDS 2029 SR-VIII', '10.000', '10.000', '0.000', '7,512.00', '75,120.00'),
+  L('INE848E07AB4', '9.10% NCD NHPC SERIES 2030', '50.000', '50.000', '0.000', '1,000.00', '50,000.00'),
+  L('INE009A01021', 'INFOSYS LIMITED - EQUITY SHARES', '10.000', '10.000', '0.000', '1,850.00', '18,500.00'),
+]);
+const text = (rows) => rows.map((r) => r.text);
 
 describe('NSDL/CDSL bond import', () => {
   test('recognises depository statements and leaves CAMS ones alone', () => {
-    assert.equal(isDepositoryStatement(NSDL), true);
-    assert.equal(isDepositoryStatement(CDSL), true);
+    assert.equal(isDepositoryStatement(text(NSDL)), true);
+    assert.equal(isDepositoryStatement(text(CDSL)), true);
     assert.equal(isDepositoryStatement(['Consolidated Account Statement', 'Folio No: 123', 'Closing Unit Balance: 1.000', 'NSDL DP ID: IN300095']), false);
   });
 
@@ -56,6 +108,8 @@ describe('NSDL/CDSL bond import', () => {
     assert.ok(isDebtISIN('IN1520230123'));
     assert.ok(isDebtISIN('INE001A07RU8'));
     assert.ok(isDebtISIN('INE848E08XY1'));
+    // Without a section heading to go by, PTCs and the like aren't recognised from the ISIN alone.
+    assert.ok(!isDebtISIN('INE000C15011'));
     assert.ok(!isDebtISIN('INE002A01018'));
     assert.ok(!isDebtISIN('INF179K01UT0'));
   });
@@ -68,18 +122,35 @@ describe('NSDL/CDSL bond import', () => {
     assert.equal(parseStatementDate('7.18%'), null);
   });
 
-  test('NSDL: bonds with coupon and maturity; shares, funds and transactions ignored', () => {
+  test('NSDL and CDSL tables: wrapped names, coupons and maturities; shares, funds and transactions ignored', () => {
     const s = parseDematBonds(NSDL);
     assert.equal(s.asOf, d(2026, 9, 30));
     assert.deepEqual(
-      s.holdings.map((h) => [h.isin, h.name, h.value, h.coupon, h.maturity, h.account]),
+      s.holdings.map((h) => [h.account, h.isin, h.name, h.value, h.coupon, h.maturity]),
       [
-        ['IN0020200195', 'SGB 2020-21 SERIES VIII', 150240, 2.5, d(2028, 11, 10), 'IN30009512345678'],
-        ['IN0020230085', 'GOI LOAN 7.18% 2033', 101250, 7.18, d(2033, 8, 14), 'IN30009512345678'],
-        // The figures wrapped onto the next line.
-        ['INE001A07RU8', 'HOUSING DEVELOPMENT FINANCE CORPORATION LIMITED SR-X NCD', 25312.5, null, null, 'IN30009512345678'],
+        ['IN30009512345678', 'IN0020200195', 'SGB 2020-21 SERIES VIII', 150240, 2.5, d(2028, 11, 10)],
+        ['IN30009512345678', 'IN0020230085', 'GOI LOAN 7.18% 2033', 101250, 7.18, d(2033, 8, 14)],
+        ['IN30009512345678', 'INE000A07AA1', 'EXAMPLE FINANCE LIMITED', 20000, null, d(2028, 8, 4)],
+        // One issuer's bonds get their coupon and maturity in the name; NSDL's table has no coupon, but the same bond in the CDSL account does.
+        ['IN30009512345678', 'INE000B07AB2', 'SAMPLE CREDIT CAPITAL PRIVATE LIMITED 12% Sep 2027', 50000, 12, d(2027, 9, 29)],
+        ['IN30009512345678', 'INE000B07AC0', 'SAMPLE CREDIT CAPITAL PRIVATE LIMITED Apr 2028', 20000, null, d(2028, 4, 26)],
+        // Securitised instruments (PTCs) are debt too.
+        ['1208180087654321', 'INE000C15011', 'EXAMPLE TRUST MAY 2025', 201840, 11.4, d(2027, 9, 28)],
+        ['1208180087654321', 'INE000B07AB2', 'SAMPLE CREDIT CAPITAL PRIVATE LTD 12% Sep 2027', 49130, 12, d(2027, 9, 29)],
+        ['1208180087654321', 'INE000B07AD8', 'SAMPLE CREDIT CAPITAL PRIVATE LTD 13% May 2027', 99450, 13, d(2027, 5, 24)],
       ],
     );
+  });
+
+  test('a table split across pages keeps each name with its own bond', () => {
+    const rows = [
+      ...page(['DP ID : IN300095 Client ID: 12345678', 'Corporate Bonds (C)', L('ISIN', 'Company Name', 'Value'), L('', 'FIRST FINANCE'), L('INE000D07AA7', 'LIMITED', '12-Jan-2028', '10,000.00'), L('', 'Fixed Interest Bonds')], 1),
+      ...page(['Page 2', 'Consolidated Account Statement', L('ISIN', 'Company Name', 'Value'), L('', 'SECOND FINANCE LIMITED'), L('INE000E07AA5', '', '12-Feb-2028', '20,000.00'), L('', 'Fixed Interest Bonds'), 'Sub Total  30,000.00'], 2),
+    ];
+    assert.deepEqual(parseDematBonds(rows).holdings.map((h) => [h.isin, h.name, h.value]), [
+      ['INE000D07AA7', 'FIRST FINANCE LIMITED', 10000],
+      ['INE000E07AA5', 'SECOND FINANCE LIMITED', 20000],
+    ]);
   });
 
   test('CDSL: BO ID account, coupon from the description', () => {
@@ -94,29 +165,34 @@ describe('NSDL/CDSL bond import', () => {
     );
   });
 
-  test('a description that wraps below its row joins the name; a heading after the table does not', () => {
-    const lines = [
-      'DP ID: IN300095\tClient ID: 12345678',
-      'INE001A07RU8 EXAMPLE HOUSING FINANCE LIMITED\t1,000.00\t25\t1,012.50 25,312.50',
-      'SR-X 8.25% NCD',
-      'IN0020200195 SGB 2020-21 SERIES VIII 2.50%\t10-Nov-2028\t1.00\t20\t7,512.00 1,50,240.00',
-      'Mutual Fund Folios',
-      'IN0020230085 GOI LOAN 7.18% 2033 7.18% 14-Aug-2033 100.00 1,000 101.25 1,01,250.00',
+  test('a description that wraps below its row joins the name; figures can share its cell or wrap to the next line', () => {
+    const rows = page([
+      'DP ID: IN300095  Client ID: 12345678',
+      L('INE001A07RU8', 'EXAMPLE HOUSING FINANCE LIMITED', '1,000.00', '25', '1,012.50 25,312.50'),
+      L('', 'SR-X 8.25% NCD'),
+      '',
+      L('IN0020200195', 'SGB 2020-21 SERIES VIII 2.50% 10-Nov-2028', '1.00', '20', '7,512.00 1,50,240.00'),
+      '',
+      L('INE001A07RV6', 'EXAMPLE HOUSING FINANCE LIMITED SR-Y NCD'),
+      L('', '', '1,000.00', '10', '1,000.00', '10,000.00'),
+      '',
+      // No gaps wide enough to split cells: the figures are peeled off the end, taking the name's own figures with them.
+      L('IN0020230085', 'GOI LOAN 7.18% 2033 7.18% 14-Aug-2033 100.00 1,000 101.25 1,01,250.00'),
       'Page 1 of 4',
-    ];
+    ]);
     assert.deepEqual(
-      parseDematBonds(lines).holdings.map((h) => [h.name, h.coupon, h.value]),
+      parseDematBonds(rows).holdings.map((h) => [h.name, h.coupon, h.maturity, h.value]),
       [
-        ['EXAMPLE HOUSING FINANCE LIMITED SR-X 8.25% NCD', 8.25, 25312.5],
-        ['SGB 2020-21 SERIES VIII', 2.5, 150240],
-        // No gaps wide enough for tabs: the figures are peeled off the end, taking the name's own figures with them.
-        ['GOI LOAN', 7.18, 101250],
+        ['EXAMPLE HOUSING FINANCE LIMITED SR-X 8.25% NCD', 8.25, null, 25312.5],
+        ['SGB 2020-21 SERIES VIII', 2.5, d(2028, 11, 10), 150240],
+        ['EXAMPLE HOUSING FINANCE LIMITED SR-Y NCD', null, null, 10000],
+        ['GOI LOAN', 7.18, d(2033, 8, 14), 101250],
       ],
     );
   });
 
   test('a statement with only shares explains what is imported', () => {
-    const sharesOnly = CDSL.filter((l) => !/^IN(0|E848)/.test(l));
+    const sharesOnly = CDSL.filter((r) => !/^IN(0|E848)/.test(r.text));
     assert.throws(() => parseDematBonds(sharesOnly), (e) => e instanceof CASError && /No bonds/.test(e.message));
   });
 

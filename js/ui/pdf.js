@@ -28,6 +28,14 @@ export class PDFPasswordError extends Error {
  * @throws {PDFPasswordError} when a password is missing or wrong
  */
 export async function pdfLines(data, password) {
+  return (await pdfRows(data, password)).map((row) => row.text);
+}
+
+/**
+ * Like pdfLines, but each line keeps where it sits on the page, for tables whose cells wrap over several lines.
+ * @returns {Promise<Row[]>}
+ */
+export async function pdfRows(data, password) {
   const { getDocument, PasswordResponses } = await loadPDFJS();
   // pdf.js hands the buffer to its worker, so give it a copy and keep ours for a password retry.
   const task = getDocument({ data: new Uint8Array(data.slice(0)), password, isEvalSupported: false, disableFontFace: true, useSystemFonts: false });
@@ -40,14 +48,14 @@ export async function pdfLines(data, password) {
     throw new Error('This file couldn’t be read as a PDF.');
   }
   try {
-    const lines = [];
+    const rows = [];
     for (let n = 1; n <= doc.numPages; n++) {
       const page = await doc.getPage(n);
       const { items } = await page.getTextContent();
-      lines.push(...linesFromItems(items));
+      rows.push(...rowsFromItems(items, n));
       page.cleanup();
     }
-    return lines;
+    return rows;
   } finally {
     await task.destroy();
   }
@@ -55,6 +63,17 @@ export async function pdfLines(data, password) {
 
 /** Groups pdf.js text items ({ str, transform: [a, b, c, d, x, y], width, height }) into lines, top to bottom. */
 export function linesFromItems(items) {
+  return rowsFromItems(items).map((row) => row.text);
+}
+
+const ISIN_ONLY = /^IN[0-9A-Z]{9}[0-9]$/;
+
+/**
+ * @typedef {{ x: number, end: number, h: number, text: string }} Cell text that runs together, in page points (y grows upwards)
+ * @typedef {{ page: number, y: number, text: string, cells: Cell[] }} Row a visual line; text is its cells joined by tabs
+ * @returns {Row[]}
+ */
+export function rowsFromItems(items, page = 1) {
   const rows = [];
   for (const it of items) {
     if (!it.str?.trim()) continue;
@@ -68,17 +87,22 @@ export function linesFromItems(items) {
   rows.sort((a, b) => b.y - a.y);
   return rows.map((row) => {
     row.items.sort((a, b) => a.x - b.x);
-    let text = '';
-    let end = null;
+    const cells = [];
+    let cell = null;
     for (const it of row.items) {
-      if (end != null) {
-        const gap = it.x - end;
-        if (gap > 1.5 * it.h) text += '\t';
-        else if (gap > 0.15 * it.h && !/\s$/.test(text) && !/^\s/.test(it.str)) text += ' ';
+      const gap = cell ? it.x - cell.end : 0;
+      // A wide gap starts a new cell, and so does anything after an ISIN that starts the line (a table's first column).
+      if (!cell || gap > 1.5 * it.h || (cells.length === 1 && ISIN_ONLY.test(cell.text.trim()))) {
+        cells.push((cell = { x: it.x, end: it.end, h: it.h, text: it.str }));
+        continue;
       }
-      text += it.str;
-      end = Math.max(end ?? -Infinity, it.end);
+      if (gap > 0.15 * it.h && !/\s$/.test(cell.text) && !/^\s/.test(it.str)) cell.text += ' ';
+      cell.text += it.str;
+      cell.end = Math.max(cell.end, it.end);
+      cell.h = Math.max(cell.h, it.h);
     }
-    return text.replace(/[  ]+/g, ' ').trim();
+    for (const c of cells) c.text = c.text.replace(/[ \u00a0]+/g, ' ').trim();
+    const kept = cells.filter((c) => c.text);
+    return { page, y: row.y, text: kept.map((c) => c.text).join('\t'), cells: kept };
   });
 }
