@@ -552,8 +552,8 @@ details.menu > summary::-webkit-details-marker { display: none; }
 }
 .menu-items a .icon { color: var(--accent); width: 20px; height: 20px; }
 .menu-items a:hover, .menu-items a:focus-visible { background: var(--fill); outline: none; }
-.menu-items .menu-sep { position: relative; margin-top: 7px; }
-.menu-items .menu-sep::before { content: ''; position: absolute; top: -4px; left: 12px; right: 12px; border-top: 0.5px solid var(--sep); }
+.menu-items .menu-sep-after { position: relative; margin-bottom: 7px; }
+.menu-items .menu-sep-after::after { content: ''; position: absolute; bottom: -4px; left: 12px; right: 12px; border-top: 0.5px solid var(--sep); }
 
 /* MARK: - Form fields */
 

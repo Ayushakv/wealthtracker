@@ -14,7 +14,7 @@ Tracks bank accounts, real estate, mutual funds (live NAVs from mfapi.in), PPF (
 
 ## Import from your CAS
 
-Assets → **+** → **Import Funds or Bonds from CAS** (also in Settings). It tells the two kinds of statement apart by itself.
+Assets → **+** → **Import Mutual Funds or Bonds from CAS** (also in Settings). It tells the two kinds of statement apart by itself.
 
 ### Mutual funds (CAMS + KFintech)
 

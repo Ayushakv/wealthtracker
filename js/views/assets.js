@@ -85,8 +85,8 @@ function addMenu() {
   return html`<details class="menu">
     <summary class="btn btn-primary" aria-label="Add Asset">${icon('plus')}<span class="hide-narrow">Add Asset</span></summary>
     <div class="menu-items" role="menu">
+      <a role="menuitem" href="#/assets" class="menu-sep-after" data-action="import-cas">${icon('import')}<span>Import Mutual Funds or Bonds from CAS</span></a>
       ${CATEGORIES.map((c) => html`<a role="menuitem" href="#/new/${c.slug}">${icon(c.icon)}<span>${c.raw}</span></a>`)}
-      <a role="menuitem" href="#/assets" class="menu-sep" data-action="import-cas">${icon('import')}<span>Import Funds or Bonds from CAS</span></a>
     </div>
   </details>`;
 }
