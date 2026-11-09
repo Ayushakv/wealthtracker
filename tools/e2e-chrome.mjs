@@ -2,11 +2,14 @@
 //   npm run test:e2e                 (screenshots go to ./e2e-shots, or SHOTS_DIR)
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startServer } from './serve.mjs';
+import { exportBackup } from '../js/core/backup.js';
+import { OFFICIAL_HISTORY, RateSchedule } from '../js/core/ppf.js';
+import { samplePortfolio } from '../tests/seed.js';
 
 const CHROME = process.env.CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const SHOTS = resolve(process.env.SHOTS_DIR ?? 'e2e-shots');
@@ -64,6 +67,9 @@ const cdp = await launch();
 const { send } = cdp;
 await mkdir(SHOTS, { recursive: true });
 const downloads = await mkdtemp(join(tmpdir(), 'wt-dl-'));
+// A portfolio with every category, imported as a backup to give the app something to show.
+const portfolioFile = join(await mkdtemp(join(tmpdir(), 'wt-portfolio-')), 'portfolio.json');
+await writeFile(portfolioFile, exportBackup({ assets: samplePortfolio(RateSchedule.official), ppfRates: OFFICIAL_HISTORY }));
 
 const problems = [];
 let expectNetworkErrors = false;
@@ -151,9 +157,18 @@ try {
   await waitFor(`document.querySelector('h1')?.textContent === 'Net Worth' && document.querySelector('.empty')`, 'empty dashboard');
   await shot('dashboard-empty');
 
-  step('Load sample portfolio');
-  await click('[data-action="load-sample"]');
+  assert(!(await evaluate(`document.querySelector('[data-action="load-sample"]')`)), 'no sample portfolio button');
+
+  step('Import a portfolio backup, then refresh NAVs');
+  await send('Page.setInterceptFileChooserDialog', { enabled: true });
+  await go('#/settings');
+  await waitFor(`document.querySelector('[data-action="import"]')`, 'settings');
+  assert(!(await text('main')).includes('Sample'), 'no sample portfolio in settings');
+  await chooseFile('[data-action="import"]', portfolioFile);
+  await waitFor(`document.querySelector('#toast.show')?.textContent.startsWith('Imported')`, 'backup import toast');
+  await go('#/dashboard');
   await waitFor(`document.querySelector('.card.summary')`, 'summary card');
+  await click('[data-action="refresh"]');
   await waitFor(`!document.querySelector('[data-action="refresh"]')?.disabled`, 'refresh finished', 20_000);
   assert((await text('.hero')).startsWith('₹'), 'hero shows rupees');
   const slices = await evaluate(`document.querySelectorAll('.slice').length`);
@@ -249,7 +264,6 @@ try {
   assert(backup.assets.length === assetCount + 1, 'backup holds every asset');
 
   step('Import the same backup (merges by ID, no duplicates)');
-  await send('Page.setInterceptFileChooserDialog', { enabled: true });
   await chooseFile('[data-action="import"]', join(downloads, backupFile));
   await waitFor(`document.querySelector('#toast.show')?.textContent.includes('Imported ${assetCount + 1} assets')`, 'import toast');
   await go('#/assets');
@@ -267,7 +281,7 @@ try {
   await waitFor(`document.querySelector('dialog[open] .cas-list')`, 'review dialog', 15_000);
   const review = await evaluate(`[...document.querySelectorAll('dialog .cas-item')].map((li) => li.textContent.replace(/\\s+/g, ' ').trim())`);
   assert(review.length === 3, `3 funds to import (got ${JSON.stringify(review)})`);
-  // The sample portfolio's HDFC Flexi Cap (same AMFI code, no folio) is updated rather than duplicated.
+  // The test portfolio's HDFC Flexi Cap (same AMFI code, no folio) is updated rather than duplicated.
   assert(review.some((r) => r.includes('HDFC Flexi Cap Fund – Direct Growth') && r.includes('412.537 → 112.345') && r.includes('Update')), 'HDFC updated');
   assert((await text('dialog h2')) === 'Import 3 Funds', 'review title');
   assert((await text('dialog form')).includes('1 fully redeemed fund'), 'redeemed fund noted');
@@ -402,4 +416,5 @@ try {
   await cdp.close();
   server.close();
   if (existsSync(downloads)) await rm(downloads, { recursive: true, force: true });
+  await rm(resolve(portfolioFile, '..'), { recursive: true, force: true });
 }

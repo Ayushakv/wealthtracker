@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { date as d } from '../js/core/calendar.js';
 import { exportBackup, mergeBackup, parseBackup } from '../js/core/backup.js';
 import { OFFICIAL_HISTORY, RateSchedule } from '../js/core/ppf.js';
-import { samplePortfolio } from '../js/core/seed.js';
+import { samplePortfolio } from './seed.js';
 
 const now = d(2026, 10, 26);
 

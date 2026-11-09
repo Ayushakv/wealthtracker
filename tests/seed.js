@@ -1,8 +1,8 @@
-import { addDays, addMonths, addYears, date, financialYearStart } from './calendar.js';
-import { Category } from './categories.js';
-import { createAsset, createEntry, recompute } from './assets.js';
+import { addDays, addMonths, addYears, date, financialYearStart } from '../js/core/calendar.js';
+import { Category } from '../js/core/categories.js';
+import { createAsset, createEntry, recompute } from '../js/core/assets.js';
 
-/** Realistic sample portfolio for exploring the dashboard. Every category is represented. */
+/** A realistic portfolio for tests. Every category is represented. */
 export function samplePortfolio(rates, now = Date.now()) {
   const daysFromNow = (d) => addDays(now, d);
   const monthsAgo = (m) => addMonths(now, -m);

@@ -7,7 +7,7 @@ import { Category } from '../js/core/categories.js';
 import { allocation, countsTowardsNetWorth, createAsset, recompute, totals, upcomingRenewals } from '../js/core/assets.js';
 import { applyDraft, draftFromAsset, newDraft, validateDraft } from '../js/core/draft.js';
 import { RateSchedule } from '../js/core/ppf.js';
-import { samplePortfolio } from '../js/core/seed.js';
+import { samplePortfolio } from './seed.js';
 import { renewalCalendar } from '../js/core/ics.js';
 
 describe('IST calendar', () => {

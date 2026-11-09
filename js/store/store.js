@@ -4,7 +4,6 @@ import { quarterStart } from '../core/calendar.js';
 import { Category } from '../core/categories.js';
 import { latestNAVs } from '../core/mfapi.js';
 import { OFFICIAL_HISTORY, RateSchedule } from '../core/ppf.js';
-import { samplePortfolio } from '../core/seed.js';
 import { decryptJSON, deriveKey, encryptJSON, MIN_PASSCODE_LENGTH, PBKDF2_ITERATIONS, randomBytes } from './crypto.js';
 import { clearAll, getMany, openDB, putMany } from './db.js';
 
@@ -279,13 +278,6 @@ export class Store extends EventTarget {
       this.assets = [];
       this.settings.failures = {};
     });
-  }
-
-  async loadSample() {
-    await this.mutate(() => {
-      this.assets.push(...samplePortfolio(this.rates));
-    });
-    await this.refresh();
   }
 
   // MARK: - PPF rates

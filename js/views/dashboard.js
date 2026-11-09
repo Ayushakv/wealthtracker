@@ -3,7 +3,7 @@ import { daysBetween, startOfDay } from '../core/calendar.js';
 import { formatDate, formatRelative, inr, percent, signedCompact } from '../core/format.js';
 import { renewalCalendar } from '../core/ics.js';
 import { donut, mountDonut } from '../ui/donut.js';
-import { deliverFile, toast } from '../ui/dom.js';
+import { deliverFile } from '../ui/dom.js';
 import { html } from '../ui/html.js';
 import { icon } from '../ui/icons.js';
 import { emptyState, pageHead, signClass } from './common.js';
@@ -79,8 +79,8 @@ export const dashboardView = {
       return html`${head}${emptyState({
         iconName: 'rupee',
         title: 'No Assets Yet',
-        text: 'Add your first asset from the Assets tab, or load a sample portfolio to explore the dashboard.',
-        action: html`<button class="btn btn-primary" data-action="load-sample">Load Sample Portfolio</button>`,
+        text: 'Add your first asset from the Assets tab, or import a CAS statement or a backup from Settings.',
+        action: html`<a class="btn btn-primary" href="#/assets">Go to Assets</a>`,
       })}`;
     }
     const slices = allocation(store.assets);
@@ -106,10 +106,6 @@ export const dashboardView = {
     async 'renewals-to-calendar'(_, { store, now }) {
       const policies = upcomingRenewals(store.assets, now);
       await deliverFile(renewalCalendar(policies, now), 'WealthTracker-Renewals.ics', 'text/calendar');
-    },
-    async 'load-sample'(_, { store }) {
-      await store.loadSample();
-      toast('Sample portfolio added.');
     },
   },
 };

@@ -76,7 +76,6 @@ export const settingsView = {
         row('Network', 'mfapi.in (AMFI codes only)'),
       ])}
       ${group({ title: 'Data' }, [
-        button('load-sample', 'spark', 'Load Sample Portfolio'),
         button('delete-all', 'trash', 'Delete All Assets', { disabled: !store.assets.length, cls: 'danger' }),
         button('erase-everything', 'trash', 'Erase Everything and Start Over', { cls: 'danger' }),
       ])}`;
@@ -124,11 +123,6 @@ export const settingsView = {
       installPrompt.prompt();
       await installPrompt.userChoice;
       installPrompt = null;
-    },
-
-    async 'load-sample'(_, { store }) {
-      await store.loadSample();
-      toast('Sample portfolio added.');
     },
 
     async 'delete-all'(_, { store }) {

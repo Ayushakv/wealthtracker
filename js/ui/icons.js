@@ -33,7 +33,6 @@ const PATHS = {
   rupee: '<path d="M7 4h10M7 8.5h10M7 4c5.5 0 7 2 7 4.5S11.5 13 7.5 13L15 20.5"/>',
   tray: '<path d="M3 13l3-8h12l3 8v6H3z"/><path d="M3 13h5l1.5 2.5h5L16 13h5"/>',
   install: '<rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M12 7.5v7M9 11.5l3 3 3-3"/>',
-  spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8"/>',
 };
 
 export function icon(name, cls = '') {
