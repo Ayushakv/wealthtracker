@@ -13,7 +13,7 @@ export const welcomeView = {
         <h1>WealthTracker</h1>
         <p class="muted">Your net worth across bank, land, mutual funds, PPF, NPS, bonds, P2P and insurance — kept on this device only.</p>
         <ul class="points">
-          <li>${icon('shield')}<span><strong>Private.</strong> No account, no server. Nothing leaves this device except AMFI scheme codes sent to mfapi.in for NAVs.</span></li>
+          <li>${icon('shield')}<span><strong>Private.</strong> No account, no server. Nothing leaves this device except AMFI scheme codes sent to mfapi.in for NAVs, and, if you turn on sync, an encrypted copy kept in your own GitHub account.</span></li>
           <li>${icon('lock')}<span><strong>Encrypted.</strong> Set a passcode and everything stored is encrypted with it.</span></li>
           <li>${icon('install')}<span><strong>Works offline.</strong> Add it to your Home Screen and it opens like an app.</span></li>
         </ul>
@@ -24,7 +24,7 @@ export const welcomeView = {
           <button class="btn btn-primary btn-block" data-ok>Encrypt with Passcode</button>
           <button type="button" class="btn btn-block btn-quiet" data-action="setup-plain">Continue without a passcode</button>
         </form>
-        <p class="muted small">Have a backup from the iPhone app? Import it from Settings once you’re in.</p>
+        <p class="muted small">Already using WealthTracker on another device? Continue, then turn on <strong>Sync</strong> in Settings to bring your data here. Have a backup file? Import it from Settings.</p>
       </div>`;
   },
 

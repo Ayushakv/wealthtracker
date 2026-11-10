@@ -6,11 +6,25 @@ Tracks bank accounts, real estate, mutual funds (live NAVs from mfapi.in), PPF (
 
 ## Where your data lives
 
-- Everything stays in this browser's storage (IndexedDB) on this device. Nothing is sent to a server.
-- The only network request is to `api.mfapi.in`, and it sends just the AMFI scheme code to fetch the latest NAV.
+- Everything stays in this browser's storage (IndexedDB) on this device. Nothing is sent to a server, unless you turn on sync (below).
+- The only other network request is to `api.mfapi.in`, and it sends just the AMFI scheme code to fetch the latest NAV.
 - With a passcode turned on, data is encrypted at rest (AES-GCM-256, key derived with PBKDF2-SHA256 at 600,000 iterations). If you forget the passcode, the data can't be recovered, so keep a backup.
 - **CAS import** reads the PDF in the browser; the file and its password never leave the device.
 - **Backups:** Settings → Export Backup saves a plain JSON file. It's the same format as the earlier iPhone app, so old backups import directly. Importing merges by asset ID, so importing the same file twice doesn't create duplicates.
+
+## Sync between devices (optional)
+
+Each browser keeps its own copy, so a new phone or browser starts empty. Sync keeps them the same:
+
+1. Settings → **Set Up Sync**. Follow the link to create a GitHub token with only the **gist** permission (choose "No expiration" if you don't want to redo this), and paste it in.
+2. On the first device, choose a sync passphrase. On every other device, paste a token (the same one or a new one) and enter the same passphrase. Your data appears.
+
+How it works:
+
+- The data is encrypted on the device (AES-GCM-256, key from your sync passphrase via PBKDF2-SHA256, 600,000 iterations) and saved as a single file in a **secret gist** in your GitHub account. GitHub only ever sees ciphertext. Without the passphrase, nobody can read it, including you if you forget it; your devices still keep their own copies.
+- The app syncs when it opens, a couple of seconds after each change, and when you tap Sync Now. Each device remembers the data as of its last sync, so changes from different devices are combined field by field rather than one overwriting the other. Assets deleted on one device are deleted on the others. If two devices change the same field, the more recently updated copy wins.
+- The token and passphrase are stored on the device (encrypted too, when a passcode is on). "Turn Off Sync on This Device" forgets them and leaves the gist for your other devices. "Erase Everything" doesn't touch the gist, so setting up sync again brings everything back.
+- Sync covers your assets and the PPF rate list. Per-device things (passcode, last NAV refresh) aren't synced.
 
 ## Import from your statements
 
@@ -81,7 +95,7 @@ Refresh the ISIN → AMFI code map now and then to pick up new schemes: `node to
 
 It opens full-screen, works offline, and refreshes NAVs when you're online.
 
-Safari can delete a website's storage after 7 days without a visit. Home Screen web apps are exempt, which is another reason to install it. Export a backup now and then anyway (Settings → Export Backup → Save to Files).
+Safari can delete a website's storage after 7 days without a visit. Home Screen web apps are exempt, which is another reason to install it. Export a backup now and then anyway (Settings → Export Backup → Save to Files), or turn on sync. Note that on iPhone the Home Screen app and Safari keep separate storage.
 
 ## Renewal reminders
 

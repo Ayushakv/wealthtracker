@@ -12,6 +12,8 @@ import { settingsView } from './views/settings.js';
 
 /** Pull fresh NAVs when the app comes back after this long. */
 const STALE_MS = 30 * 60 * 1000;
+/** Fetch other devices' changes when the app comes back after this long. */
+const SYNC_STALE_MS = 60 * 1000;
 
 const ROUTES = [
   { pattern: /^\/dashboard$/, view: dashboardView, tab: 'dashboard' },
@@ -179,12 +181,15 @@ store.addEventListener('change', () => {
 
 document.addEventListener('visibilitychange', () => {
   store.noteVisibility(document.hidden);
-  if (!document.hidden && store.status === 'ready' && Date.now() - (store.settings.lastRefresh ?? 0) > STALE_MS) store.refresh();
+  if (document.hidden || store.status !== 'ready') return;
+  if (Date.now() - (store.settings.lastRefresh ?? 0) > STALE_MS) store.refresh();
+  if (Date.now() - (store.settings.sync?.lastSync ?? 0) > SYNC_STALE_MS) store.syncNow();
 });
 
 window.addEventListener('online', () => {
   render({ fromStore: true });
   store.refresh();
+  store.syncNow();
 });
 window.addEventListener('offline', () => render({ fromStore: true }));
 

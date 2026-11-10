@@ -10,11 +10,15 @@ import { startServer } from './serve.mjs';
 import { createAsset } from '../js/core/assets.js';
 import { exportBackup } from '../js/core/backup.js';
 import { OFFICIAL_HISTORY, RateSchedule } from '../js/core/ppf.js';
+import { deriveKey } from '../js/store/crypto.js';
+import { fromBase64, readEnvelope, seal, SYNC_FILE, unseal } from '../js/store/sync.js';
+import { fakeGitHub } from '../tests/fakeGitHub.js';
 import { samplePortfolio } from '../tests/seed.js';
 
 const CHROME = process.env.CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const SHOTS = resolve(process.env.SHOTS_DIR ?? 'e2e-shots');
 const PASSCODE = 'correct-horse-7';
+const SYNC_PASSPHRASE = 'battery-staple-9';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // MARK: - Minimal CDP client
@@ -82,6 +86,8 @@ cdp.on('Log.entryAdded', ({ entry }) => {
   if (entry.level !== 'error') return;
   // mfapi.in may be unreachable from the test machine; that's handled in-app and shown in the footer.
   if (/mfapi\.in/.test(entry.url ?? '') || (expectNetworkErrors && entry.source === 'network')) return;
+  // The sync test tries a wrong token on purpose.
+  if (/api\.github\.com\/user/.test(entry.url ?? '') && /401/.test(entry.text)) return;
   problems.push(`log: ${entry.text} ${entry.url ?? ''}`);
 });
 
@@ -89,6 +95,39 @@ await send('Runtime.enable');
 await send('Log.enable');
 await send('Page.enable');
 await send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: downloads });
+
+// GitHub's gist API, answered in memory so sync can be tested without an account or a network.
+const github = fakeGitHub();
+const cors = [
+  { name: 'Access-Control-Allow-Origin', value: '*' },
+  { name: 'Access-Control-Allow-Headers', value: 'authorization, content-type, accept, x-github-api-version' },
+  { name: 'Access-Control-Allow-Methods', value: 'GET, POST, PATCH' },
+];
+cdp.on('Fetch.requestPaused', ({ requestId, request }) => {
+  if (request.method === 'OPTIONS') return send('Fetch.fulfillRequest', { requestId, responseCode: 204, responseHeaders: cors });
+  const body = request.postData ?? (request.postDataEntries ? Buffer.concat(request.postDataEntries.map((e) => Buffer.from(e.bytes ?? '', 'base64'))).toString() : undefined);
+  const res = github.handle({ method: request.method, url: request.url, headers: request.headers, body });
+  send('Fetch.fulfillRequest', {
+    requestId,
+    responseCode: res.status,
+    responseHeaders: [...cors, { name: 'Content-Type', value: 'application/json' }],
+    body: Buffer.from(JSON.stringify(res.body)).toString('base64'),
+  });
+});
+await send('Fetch.enable', { patterns: [{ urlPattern: 'https://api.github.com/*' }] });
+/** Another device's view of the synced data: decrypts the gist. */
+async function readSyncedCopy() {
+  const [gist] = github.gists.values();
+  const envelope = readEnvelope(gist.files[SYNC_FILE].content);
+  const key = await deriveKey(SYNC_PASSPHRASE, fromBase64(envelope.salt), envelope.iterations);
+  return { gist, envelope, key, data: await unseal(key, envelope) };
+}
+/** …applies `change` to it, and saves it back. */
+async function editSyncedCopy(change) {
+  const { gist, envelope, key, data } = await readSyncedCopy();
+  change(data);
+  gist.files[SYNC_FILE].content = await seal(key, envelope, data);
+}
 
 const evaluate = async (expression, { userGesture = false } = {}) => {
   const { result, exceptionDetails } = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true, userGesture });
@@ -422,6 +461,82 @@ try {
   await go('#/assets');
   await waitFor(`${ROWS} === ${assetCount + 17}`, 'no PPF duplicate');
 
+  step('Sync: set up with a GitHub token → an encrypted gist is created');
+  await go('#/settings');
+  await waitFor(`document.querySelector('[data-action="sync-setup"]')`, 'sync section');
+  await click('[data-action="sync-setup"]');
+  await waitFor(`document.querySelector('dialog[open] [name="token"]')`, 'token dialog');
+  await shot('sync-token');
+  await fill('dialog [name="token"]', 'ghp_wrong');
+  await click('dialog [data-ok]');
+  await waitFor(`document.querySelector('dialog [data-error]')?.textContent.includes('access token')`, 'bad token explained');
+  await fill('dialog [name="token"]', 'ghp_test');
+  await click('dialog [data-ok]');
+  await waitFor(`document.querySelector('dialog[open] [name="confirm"]')`, 'create passphrase dialog');
+  assert((await text('dialog h2')) === 'Create Sync Passphrase', 'no synced data yet');
+  await fill('dialog [name="passphrase"]', SYNC_PASSPHRASE);
+  await fill('dialog [name="confirm"]', SYNC_PASSPHRASE);
+  await shot('sync-passphrase-new');
+  await click('dialog [data-ok]');
+  await waitFor(`document.querySelector('#toast.show')?.textContent.startsWith('Sync is on')`, 'sync on', 15_000);
+  await waitFor(`document.querySelector('[data-sync-status]')?.textContent.startsWith('Synced')`, 'synced status');
+  assert(github.gists.size === 1, 'one gist');
+  const gistText = [...github.gists.values()][0].files[SYNC_FILE].content;
+  assert(!/renamed|PPF|HDFC|Savings/.test(gistText), 'gist holds only ciphertext');
+  await shot('settings-sync-on', { full: true });
+
+  step('Sync: a change made on another device arrives');
+  await editSyncedCopy((data) => {
+    data.assets.find((a) => a.name === 'PPF — renamed').name = 'PPF — from the laptop';
+    data.assets.push({ ...structuredClone(data.assets[0]), id: 'E2E-SYNCED-ASSET', name: 'Added on the laptop' });
+  });
+  await click('[data-action="sync-now"]');
+  await waitFor(`document.querySelector('#toast.show')?.textContent === 'Synced.'`, 'synced toast');
+  await go('#/assets');
+  await waitFor(`document.querySelector('main').textContent.includes('PPF — from the laptop') && ${ROWS} === ${assetCount + 18}`, 'remote rename and new asset');
+
+  step('Sync: an edit here goes up on its own');
+  await go(ppfHref);
+  await waitFor(`document.querySelector('[data-action="add-entry"]')`, 'PPF detail');
+  await evaluate(`document.querySelector('a[href$="/edit"]').click()`);
+  await waitFor(`document.querySelector('input[name="name"]')`, 'edit form');
+  await fill('input[name="name"]', 'PPF — edited on the phone');
+  await evaluate(`document.querySelector('form[data-form]').requestSubmit()`);
+  const syncedName = async () => (await readSyncedCopy()).data.assets.map((a) => a.name);
+  const end = Date.now() + 10_000;
+  while (!(await syncedName()).includes('PPF — edited on the phone') && Date.now() < end) await sleep(300);
+  const syncState = await evaluate(`new Promise((done) => { const r = indexedDB.open('wealthtracker'); r.onsuccess = () => {
+    const g = r.result.transaction('kv').objectStore('kv').get('vault'); g.onsuccess = () => { const s = g.result.settings?.sync; done(JSON.stringify({ lastSync: s?.lastSync, lastError: s?.lastError, names: g.result.assets.map((a) => a.name).filter((n) => n.startsWith('PPF')) })); r.result.close(); }; }; })`);
+  assert((await syncedName()).includes('PPF — edited on the phone'), `edit pushed without tapping Sync Now (${syncState}; gist: ${(await syncedName()).filter((n) => n.startsWith('PPF'))}; calls: ${github.calls.slice(-6)})`);
+
+  step('Sync: a new device (erased) gets everything back');
+  await go('#/settings');
+  await waitFor(`document.querySelector('[data-action="erase-everything"]')`, 'settings');
+  await click('[data-action="erase-everything"]');
+  await waitFor(`document.querySelector('dialog[open]')?.textContent.includes('synced copy on GitHub is kept')`, 'erase explains sync');
+  await click('dialog button[value="ok"]');
+  await waitFor(`document.querySelector('[data-action="setup-plain"]')`, 'welcome');
+  assert((await text('.gate')).includes('turn on Sync in Settings'), 'welcome mentions sync');
+  await click('[data-action="setup-plain"]');
+  await go('#/settings');
+  await waitFor(`document.querySelector('[data-action="sync-setup"]')`, 'sync section');
+  await click('[data-action="sync-setup"]');
+  await waitFor(`document.querySelector('dialog[open] [name="token"]')`, 'token dialog');
+  await fill('dialog [name="token"]', 'ghp_test');
+  await click('dialog [data-ok]');
+  await waitFor(`document.querySelector('dialog h2')?.textContent === 'Enter Sync Passphrase'`, 'existing sync found');
+  assert(!(await evaluate(`document.querySelector('dialog [name="confirm"], dialog [name="mode"]')`)), 'no confirm or combine choice on an empty device');
+  await fill('dialog [name="passphrase"]', 'not-the-passphrase');
+  await click('dialog [data-ok]');
+  await waitFor(`document.querySelector('dialog [data-error]')?.textContent.includes('not the sync passphrase')`, 'wrong passphrase', 15_000);
+  await shot('sync-passphrase-wrong');
+  await fill('dialog [name="passphrase"]', SYNC_PASSPHRASE);
+  await click('dialog [data-ok]');
+  await waitFor(`document.querySelector('#toast.show')?.textContent.startsWith('Sync is on. ${assetCount + 18} assets')`, 'data restored', 15_000);
+  await go('#/assets');
+  await waitFor(`${ROWS} === ${assetCount + 18} && document.querySelector('main').textContent.includes('PPF — edited on the phone')`, 'every asset back');
+  assert(github.gists.size === 1, 'still one gist');
+
   step('Turn on passcode → data encrypted at rest');
   await go('#/settings');
   await waitFor(`document.querySelector('[data-action="set-passcode"]')`, 'settings');
@@ -432,7 +547,7 @@ try {
   await click('dialog [data-ok]');
   await waitFor(`document.querySelector('#toast.show')?.textContent.includes('Passcode on')`, 'passcode on', 15_000);
   const atRest = await evaluate(`new Promise((done) => { const r = indexedDB.open('wealthtracker'); r.onsuccess = () => {
-    const g = r.result.transaction('kv').objectStore('kv').get('vault'); g.onsuccess = () => { const v = g.result; done({ keys: Object.keys(v).sort().join(','), plain: JSON.stringify(v).includes('renamed') }); r.result.close(); }; }; })`);
+    const g = r.result.transaction('kv').objectStore('kv').get('vault'); g.onsuccess = () => { const v = g.result; done({ keys: Object.keys(v).sort().join(','), plain: JSON.stringify(v).includes('edited on the phone') }); r.result.close(); }; }; })`);
   assert(atRest.keys === 'data,iv' && !atRest.plain, `vault is ciphertext (${JSON.stringify(atRest)})`);
 
   step('Lock → wrong passcode → unlock');

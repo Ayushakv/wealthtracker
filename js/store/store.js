@@ -4,11 +4,15 @@ import { quarterStart } from '../core/calendar.js';
 import { Category, upgradeCategory } from '../core/categories.js';
 import { latestNAVs } from '../core/mfapi.js';
 import { OFFICIAL_HISTORY, RateSchedule } from '../core/ppf.js';
+import { mergeVaults, readSyncPayload, same, syncPayload } from '../core/sync.js';
 import { decryptJSON, deriveKey, encryptJSON, MIN_PASSCODE_LENGTH, PBKDF2_ITERATIONS, randomBytes } from './crypto.js';
 import { clearAll, getMany, openDB, putMany } from './db.js';
+import { GitHubGists, MIN_SYNC_PASSPHRASE, readEnvelope, seal, SyncError, toBase64, fromBase64, unseal } from './sync.js';
 
 /** Lock again when the app comes back after being hidden this long. */
 export const AUTO_LOCK_MS = 5 * 60 * 1000;
+/** Sync this long after the last edit, so a burst of edits goes up together. */
+const SYNC_DELAY_MS = 2000;
 
 const officialRates = () => OFFICIAL_HISTORY.map((r) => ({ ...r }));
 const emptyVault = () => ({ assets: [], ppfRates: officialRates(), settings: { lastRefresh: null, failures: {} } });
@@ -21,6 +25,9 @@ const emptyVault = () => ({ assets: [], ppfRates: officialRates(), settings: { l
  *   meta  → { version: 1, encrypted: false } | { version: 1, encrypted: true, salt, iterations }
  *   vault → plain object when not encrypted, { iv, data } when encrypted
  *
+ * `settings.sync` (when sync is on) = { token, login, gistId, passphrase, base, lastSync, lastError }; `base` is the
+ * data as of the last sync, which the next one merges against (see core/sync.js).
+ *
  * Fires a "change" event whenever anything the UI shows changes.
  */
 export class Store extends EventTarget {
@@ -32,6 +39,7 @@ export class Store extends EventTarget {
   ppfRates = officialRates();
   settings = { lastRefresh: null, failures: {} };
   isRefreshing = false;
+  isSyncing = false;
 
   #db = null;
   #key = null;
@@ -40,11 +48,18 @@ export class Store extends EventTarget {
   #hiddenAt = null;
   #channel = null;
   #iterations;
+  #fetch;
+  /** { salt, iterations, key } for the sync passphrase, derived once per unlock. */
+  #syncKey = null;
+  #syncing = null;
+  #syncAgain = false;
+  #syncTimer = null;
 
-  constructor({ dbName, iterations = PBKDF2_ITERATIONS } = {}) {
+  constructor({ dbName, iterations = PBKDF2_ITERATIONS, fetchImpl } = {}) {
     super();
     this.dbName = dbName;
     this.#iterations = iterations;
+    this.#fetch = fetchImpl;
   }
 
   get rates() {
@@ -69,6 +84,7 @@ export class Store extends EventTarget {
         this.encrypted = false;
         await this.#loadVault();
         this.refresh();
+        this.syncNow();
       }
     } catch (e) {
       this.status = 'error';
@@ -112,6 +128,7 @@ export class Store extends EventTarget {
     const result = fn();
     this.#emit();
     await this.save();
+    this.#scheduleSync();
     return result;
   }
 
@@ -163,11 +180,14 @@ export class Store extends EventTarget {
     await this.#loadVault();
     this.#emit();
     this.refresh();
+    this.syncNow();
   }
 
   lock() {
     if (!this.encrypted || this.status !== 'ready') return;
     this.#key = null;
+    this.#syncKey = null;
+    clearTimeout(this.#syncTimer);
     this.assets = [];
     this.settings = { lastRefresh: null, failures: {} };
     this.status = 'locked';
@@ -192,6 +212,8 @@ export class Store extends EventTarget {
     await this.#saving.catch(() => {});
     await clearAll(this.#db);
     this.#key = null;
+    this.#syncKey = null;
+    clearTimeout(this.#syncTimer);
     this.#meta = null;
     this.encrypted = false;
     this.assets = [];
@@ -373,5 +395,162 @@ export class Store extends EventTarget {
     });
     this.refresh();
     return parsed.assets.length;
+  }
+
+  // MARK: - Sync (encrypted copy in a secret GitHub gist)
+
+  get syncOn() {
+    return !!this.settings.sync?.token;
+  }
+
+  #gists(token) {
+    return new GitHubGists(token, this.#fetch);
+  }
+
+  /**
+   * First step of turning sync on: checks the token and looks for data synced from another device.
+   * @returns {{ token, login, gistId, envelope }} for connectSync
+   */
+  async probeSync(token) {
+    if (!token?.trim()) throw new SyncError('Paste the access token from GitHub.', 'auth');
+    const gists = this.#gists(token);
+    const login = await gists.login();
+    const gistId = await gists.find();
+    const envelope = gistId ? readEnvelope(await gists.read(gistId)) : null;
+    return { token: gists.token, login, gistId, envelope };
+  }
+
+  /**
+   * Turns sync on with the passphrase: decrypts what's already synced (throwing SyncError 'passphrase' if it's the
+   * wrong one) and combines it with this device's data, or, with `replace`, swaps this device's data for it.
+   * @returns the number of assets now on this device
+   */
+  async connectSync(probe, passphrase, { replace = false } = {}) {
+    if ((passphrase ?? '').length < MIN_SYNC_PASSPHRASE) throw new SyncError(`Use at least ${MIN_SYNC_PASSPHRASE} characters.`, 'passphrase');
+    await this.#syncing?.catch(() => {});
+    let remote = null;
+    if (probe.envelope) {
+      const { salt, iterations } = probe.envelope;
+      const key = await deriveKey(passphrase, fromBase64(salt), iterations);
+      remote = readSyncPayload(await unseal(key, probe.envelope));
+      this.#syncKey = { salt, iterations, key };
+    } else {
+      const salt = toBase64(randomBytes(16));
+      this.#syncKey = { salt, iterations: this.#iterations, key: await deriveKey(passphrase, fromBase64(salt), this.#iterations) };
+    }
+    const before = { assets: this.assets, ppfRates: this.ppfRates, sync: this.settings.sync };
+    this.settings.sync = { token: probe.token, login: probe.login, gistId: probe.gistId, passphrase, base: null, lastSync: null, lastError: null };
+    if (remote && (replace || !this.assets.length)) {
+      this.assets = remote.assets;
+      this.ppfRates = remote.ppfRates.length ? remote.ppfRates : this.ppfRates;
+      this.settings.sync.base = structuredClone(syncPayload(remote));
+    }
+    try {
+      await this.#syncOnce(remote && probe.envelope);
+    } catch (e) {
+      Object.assign(this, { assets: before.assets, ppfRates: before.ppfRates });
+      this.settings.sync = before.sync;
+      this.#syncKey = null;
+      this.#emit();
+      await this.save();
+      throw e;
+    }
+    this.refresh();
+    return this.assets.length;
+  }
+
+  /** Stops syncing on this device. The encrypted copy stays on GitHub for the others. */
+  async disconnectSync() {
+    clearTimeout(this.#syncTimer);
+    await this.#syncing?.catch(() => {});
+    delete this.settings.sync;
+    this.#syncKey = null;
+    this.#emit();
+    await this.save();
+  }
+
+  #scheduleSync() {
+    if (!this.syncOn) return;
+    clearTimeout(this.#syncTimer);
+    this.#syncTimer = setTimeout(() => this.syncNow(), SYNC_DELAY_MS);
+    this.#syncTimer.unref?.();
+  }
+
+  /** Pulls, merges and pushes. Problems are kept in `settings.sync.lastError` (and thrown when `throws`). */
+  syncNow({ throws = false } = {}) {
+    if (!this.syncOn || this.status !== 'ready') return Promise.resolve();
+    clearTimeout(this.#syncTimer);
+    if (this.#syncing) {
+      this.#syncAgain = true;
+      return throws ? this.#syncing : this.#syncing.catch(() => {});
+    }
+    this.isSyncing = true;
+    this.#emit();
+    this.#syncing = (async () => {
+      try {
+        do {
+          this.#syncAgain = false;
+          await this.#syncOnce();
+        } while (this.#syncAgain && this.syncOn && this.status === 'ready');
+      } catch (e) {
+        if (this.settings.sync) {
+          this.settings.sync.lastError = e?.message ?? String(e);
+          await this.save().catch(() => {});
+        }
+        throw e;
+      } finally {
+        this.isSyncing = false;
+        this.#syncing = null;
+        this.#emit();
+      }
+    })();
+    return throws ? this.#syncing : this.#syncing.catch(() => {});
+  }
+
+  async #sealingKey(envelope) {
+    const { passphrase } = this.settings.sync;
+    const salt = envelope?.salt ?? this.#syncKey?.salt ?? toBase64(randomBytes(16));
+    const iterations = envelope?.iterations ?? this.#syncKey?.iterations ?? this.#iterations;
+    if (this.#syncKey?.salt !== salt || this.#syncKey.iterations !== iterations) {
+      this.#syncKey = { salt, iterations, key: await deriveKey(passphrase, fromBase64(salt), iterations) };
+    }
+    return this.#syncKey;
+  }
+
+  /** @param {object} [envelope] the gist's contents, when already fetched */
+  async #syncOnce(envelope) {
+    const s = this.settings.sync;
+    const gists = this.#gists(s.token);
+    let gistId = s.gistId;
+    if (!envelope && gistId) {
+      try {
+        envelope = readEnvelope(await gists.read(gistId));
+      } catch (e) {
+        if (e.kind !== 'notFound') throw e;
+        gistId = null; // deleted on GitHub: start a new one from this device's data
+      }
+    }
+    const sealing = await this.#sealingKey(envelope);
+    const remote = envelope ? readSyncPayload(await unseal(sealing.key, envelope)) : null;
+    // Locked, erased or sync turned off while waiting on the network.
+    if (this.status !== 'ready' || this.settings.sync?.token !== s.token) return;
+    const cur = this.settings.sync;
+
+    const local = { assets: this.assets, ppfRates: this.ppfRates };
+    const merged = remote ? mergeVaults({ base: cur.base, local, remote }) : structuredClone(local);
+    if (!same(merged, local)) {
+      this.assets = merged.assets;
+      this.ppfRates = merged.ppfRates;
+      this.#emit();
+      await this.save();
+    }
+    if (!remote || !same(syncPayload(merged), syncPayload(remote))) {
+      const text = await seal(sealing.key, sealing, syncPayload(merged));
+      if (gistId) await gists.write(gistId, text);
+      else gistId = await gists.create(text);
+    }
+    if (this.settings.sync?.token !== s.token) return;
+    Object.assign(this.settings.sync, { gistId, base: structuredClone(syncPayload(merged)), lastSync: Date.now(), lastError: null });
+    await this.save();
   }
 }

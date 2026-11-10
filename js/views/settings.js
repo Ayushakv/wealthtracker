@@ -1,8 +1,9 @@
 import { Category } from '../core/categories.js';
 import { suggestedFilename } from '../core/backup.js';
-import { plainNumber } from '../core/format.js';
+import { formatRelative, plainNumber } from '../core/format.js';
 import { renewalCalendar } from '../core/ics.js';
 import { MIN_PASSCODE_LENGTH } from '../store/crypto.js';
+import { MIN_SYNC_PASSPHRASE, TOKEN_URL } from '../store/sync.js';
 import { confirmDialog, deliverFile, pickTextFile, showDialog, toast } from '../ui/dom.js';
 import { html, setHTML } from '../ui/html.js';
 import { icon } from '../ui/icons.js';
@@ -39,6 +40,137 @@ function securitySection(store) {
   );
 }
 
+function syncSection(store) {
+  const s = store.settings.sync;
+  if (!s) {
+    return group(
+      {
+        title: 'Sync',
+        foot: 'Keeps the same data on every device and browser you use. An encrypted copy is saved as a secret gist in your own GitHub account; only your sync passphrase can read it.',
+      },
+      button('sync-setup', 'cloud', 'Set Up Sync'),
+    );
+  }
+  const status = store.isSyncing
+    ? 'Syncing…'
+    : s.lastError
+      ? html`<span class="warn">${icon('warning')} Not synced</span>`
+      : s.lastSync
+        ? `Synced ${formatRelative(s.lastSync)}`
+        : 'Not yet';
+  return group(
+    {
+      title: 'Sync',
+      foot: s.lastError
+        ? html`<span class="neg">${s.lastError}</span>`
+        : 'Changes sync a few seconds after you make them and whenever the app opens. Encrypted with your sync passphrase before leaving this device.',
+    },
+    [
+      row('GitHub account', s.login ?? '—'),
+      html`<div class="row"><span class="row-label">Status</span><span class="row-value" data-sync-status>${status}</span></div>`,
+      button('sync-now', 'refresh', 'Sync Now', { disabled: store.isSyncing }),
+      button('sync-off', 'cloud', 'Turn Off Sync on This Device', { cls: 'danger' }),
+    ],
+  );
+}
+
+/**
+ * A dialog whose OK button runs `work(form)` and stays open showing any error, so a wrong token or passphrase can be
+ * corrected in place. @returns what `work` returned, or null if cancelled
+ */
+function workingDialog(body, work, busyLabel, onMount) {
+  let outcome = null;
+  return showDialog(body, {
+    onMount(dialog, form) {
+      onMount?.(form);
+      const ok = form.querySelector('[data-ok]');
+      const error = form.querySelector('[data-error]');
+      form.addEventListener('submit', async (e) => {
+        if (e.submitter?.value === 'cancel') return;
+        e.preventDefault();
+        if (!form.reportValidity()) return;
+        const label = ok.textContent;
+        ok.disabled = true;
+        ok.textContent = busyLabel;
+        error.textContent = '';
+        try {
+          outcome = await work(form);
+          dialog.close();
+        } catch (x) {
+          error.textContent = x.message;
+          ok.disabled = false;
+          ok.textContent = label;
+        }
+      });
+    },
+  }).then(() => outcome);
+}
+
+function tokenDialog(store) {
+  return workingDialog(
+    html`<form method="dialog" class="sheet">
+      <h2>Set Up Sync</h2>
+      <p class="muted">Your data is encrypted on this device, then saved as a secret gist in your GitHub account. Each device needs a GitHub access token that can only manage gists.</p>
+      <ol class="steps small">
+        <li><a href="${TOKEN_URL}" target="_blank" rel="noopener">Create a token on GitHub</a>. “gist” is already ticked; leave everything else unticked.</li>
+        <li>Pick an expiry (“No expiration” means you won’t have to do this again), then <strong>Generate token</strong>.</li>
+        <li>Copy the token and paste it below.</li>
+      </ol>
+      <label class="field stacked"><span>Access token</span><input name="token" autocomplete="off" autocapitalize="off" spellcheck="false" required placeholder="ghp_…"></label>
+      <p class="neg small" data-error aria-live="assertive"></p>
+      <div class="sheet-actions">
+        <button value="cancel" class="btn" formnovalidate>Cancel</button>
+        <button value="ok" class="btn btn-primary" data-ok>Continue</button>
+      </div>
+    </form>`,
+    (form) => store.probeSync(form.token.value),
+    'Checking…',
+  );
+}
+
+function passphraseDialog(store, probe) {
+  const existing = !!probe.envelope;
+  const local = store.assets.length;
+  return workingDialog(
+    html`<form method="dialog" class="sheet">
+      <h2>${existing ? 'Enter Sync Passphrase' : 'Create Sync Passphrase'}</h2>
+      <p class="muted">${existing
+        ? `Found your synced data in ${probe.login}’s GitHub. Enter the sync passphrase you chose when you first set up sync.`
+        : `Your data is encrypted with this passphrase before it leaves this device. You’ll enter it once on each device. If you forget it, the synced copy can’t be read, though your data stays on your devices.`}</p>
+      <input type="text" name="username" autocomplete="username" value="WealthTracker sync" hidden>
+      <label class="field stacked"><span>Sync passphrase</span><input type="password" name="passphrase" autocomplete="${existing ? 'current-password' : 'new-password'}" minlength="${MIN_SYNC_PASSPHRASE}" required placeholder="At least ${MIN_SYNC_PASSPHRASE} characters"></label>
+      ${existing ? '' : html`<label class="field stacked"><span>Confirm passphrase</span><input type="password" name="confirm" autocomplete="new-password" required></label>`}
+      ${existing && local
+        ? html`<div class="segmented" role="radiogroup" aria-label="This device’s data">
+            <label><input type="radio" name="mode" value="combine" checked><span>Combine</span></label>
+            <label><input type="radio" name="mode" value="replace"><span>Use synced copy</span></label>
+          </div>
+          <p class="muted small" data-mode-hint>${MODE_HINT.combine(local)}</p>`
+        : ''}
+      <p class="neg small" data-error aria-live="assertive"></p>
+      <div class="sheet-actions">
+        <button value="cancel" class="btn" formnovalidate>Cancel</button>
+        <button value="ok" class="btn btn-primary" data-ok>Turn On Sync</button>
+      </div>
+    </form>`,
+    (form) => {
+      if (form.confirm && form.confirm.value !== form.passphrase.value) throw new Error('Passphrases don’t match.');
+      return store.connectSync(probe, form.passphrase.value, { replace: form.mode?.value === 'replace' });
+    },
+    'Syncing…',
+    (form) => form.addEventListener('change', () => {
+      const hint = form.querySelector('[data-mode-hint]');
+      if (hint) hint.textContent = MODE_HINT[form.mode.value](local);
+    }),
+  );
+}
+
+const plural = (n) => `${n} asset${n === 1 ? '' : 's'}`;
+const MODE_HINT = {
+  combine: (n) => `Adds this device’s ${plural(n)} to your synced data. Where both have the same asset, the more recently updated one is kept.`,
+  replace: (n) => `Replaces the ${plural(n)} on this device with your synced data.`,
+};
+
 function installSection() {
   if (isStandalone()) return group({ title: 'App' }, row('Installed', html`<span class="pos">${icon('check')} Running from your Home Screen</span>`));
   const how = isIOS()
@@ -55,6 +187,7 @@ export const settingsView = {
     return html`
       ${pageHead({ title: 'Settings' })}
       ${securitySection(store)}
+      ${syncSection(store)}
       ${group(
         {
           title: 'Backup',
@@ -75,9 +208,9 @@ export const settingsView = {
       ${installSection()}
       ${group({ title: 'Privacy' }, [
         row('Assets stored', String(store.assets.length)),
-        row('Storage', store.encrypted ? 'This device only · encrypted' : 'This device only'),
+        row('Storage', `${store.syncOn ? 'This device + GitHub (encrypted)' : 'This device only'}${store.encrypted ? ' · passcode' : ''}`),
         html`<div class="row"><span class="row-label">Browser may clear it</span><span class="row-value" data-persisted>Checking…</span></div>`,
-        row('Network', 'mfapi.in (AMFI codes only)'),
+        row('Network', store.syncOn ? 'mfapi.in · GitHub (sync)' : 'mfapi.in (AMFI codes only)'),
       ])}
       ${group({ title: 'Data' }, [
         button('delete-all', 'trash', 'Delete All Assets', { disabled: !store.assets.length, cls: 'danger' }),
@@ -115,6 +248,35 @@ export const settingsView = {
       }
     },
 
+    async 'sync-setup'(_, { store }) {
+      const probe = await tokenDialog(store);
+      if (!probe) return;
+      const n = await passphraseDialog(store, probe);
+      if (n == null) return;
+      toast(probe.envelope ? `Sync is on. ${n} asset${n === 1 ? '' : 's'} on this device.` : 'Sync is on. Set it up on your other devices with the same passphrase.', { duration: 5000 });
+    },
+
+    async 'sync-now'(_, { store }) {
+      try {
+        await store.syncNow({ throws: true });
+        toast('Synced.');
+      } catch (e) {
+        toast(e.message, { kind: 'error', duration: 6000 });
+      }
+    },
+
+    async 'sync-off'(_, { store }) {
+      const ok = await confirmDialog({
+        title: 'Turn off sync on this device?',
+        message: 'This device stops syncing and forgets the token and passphrase. Your data stays here, and the encrypted copy stays in your GitHub account for your other devices.',
+        confirmLabel: 'Turn Off',
+        destructive: true,
+      });
+      if (!ok) return;
+      await store.disconnectSync();
+      toast('Sync is off on this device.');
+    },
+
     'import-cas': (_, ctx) => importCAS(ctx),
     'import-nps': (_, ctx) => importCAS(ctx),
     'import-ppf': (_, ctx) => importCAS(ctx),
@@ -135,7 +297,7 @@ export const settingsView = {
       const n = store.assets.length;
       const ok = await confirmDialog({
         title: 'Delete all assets?',
-        message: `All ${n} assets and their history will be permanently removed from this device.`,
+        message: `All ${n} assets and their history will be permanently removed from this device${store.syncOn ? ' and, through sync, from your other devices' : ''}.`,
         confirmLabel: 'Delete Everything',
         destructive: true,
       });
@@ -145,7 +307,9 @@ export const settingsView = {
     async 'erase-everything'(_, { store, navigate }) {
       const ok = await confirmDialog({
         title: 'Erase everything?',
-        message: 'Removes every asset, your PPF rate list and your passcode from this device. Export a backup first if you might need it.',
+        message: store.syncOn
+          ? 'Removes every asset, your PPF rate list, your passcode and the sync settings from this device. Your synced copy on GitHub is kept: set up sync again to get it back.'
+          : 'Removes every asset, your PPF rate list and your passcode from this device. Export a backup first if you might need it.',
         confirmLabel: 'Erase',
         destructive: true,
       });
