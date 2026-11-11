@@ -137,13 +137,16 @@ export function recompute(a, rates = RateSchedule.official, now = Date.now()) {
   return a;
 }
 
+/** What a holding cost, for totals. Gold entered without the amount paid counts at its value, so it adds no gain. */
+const costBasis = (a) => (a.category === Category.gold && !(a.investedAmount > 0) ? a.currentValuation : a.investedAmount);
+
 export function totals(assets) {
   let value = 0;
   let invested = 0;
   for (const a of assets) {
     if (!countsTowardsNetWorth(a)) continue;
     value += a.currentValuation;
-    invested += a.investedAmount;
+    invested += costBasis(a);
   }
   return { value, invested, gain: value - invested };
 }

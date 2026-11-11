@@ -198,7 +198,7 @@ export const detailView = {
         countsTowardsNetWorth(a)
           ? [
               row('Current value', html`<strong class="num big">${inr(a.currentValuation)}</strong>`),
-              row('Invested', inr(a.investedAmount)),
+              a.category === Category.gold && !(a.investedAmount > 0) ? '' : row('Invested', inr(a.investedAmount)),
               a.investedAmount > 0 ? row('Gain', html`<span class="num ${signClass(gain(a))}">${inr(gain(a))} (${percent(g ?? 0)})</span>`) : '',
             ]
           : '',

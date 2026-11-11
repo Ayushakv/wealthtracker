@@ -234,7 +234,7 @@ function categorySections(d, { rates, now }) {
         [
           numberField('goldGrams', 'Weight', d.goldGrams, { digits: 4, suffix: 'g' }),
           select('goldKarat', 'Purity', KARATS.map((k) => ({ value: k.karat, label: k.label })), d.goldKarat, 'int'),
-          amountField('investedAmount', 'Amount paid', d.investedAmount),
+          numberField('investedAmount', 'Amount paid', d.investedAmount, { digits: 2, placeholder: 'Optional' }),
           html`<div data-derived="gold-value">${goldValue(d)}</div>`,
         ],
       );

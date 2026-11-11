@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { allocation, createAsset, recompute } from '../js/core/assets.js';
+import { allocation, createAsset, recompute, totals } from '../js/core/assets.js';
 import { exportBackup, parseBackup } from '../js/core/backup.js';
 import { date } from '../js/core/calendar.js';
 import { Category } from '../js/core/categories.js';
@@ -71,6 +71,15 @@ describe('Gold holdings', () => {
     const valued = applyDraft(applyGoldRate(d, goldRate), structuredClone(a), undefined, now);
     assert.equal(valued.currentValuation, 4567);
     assert.equal(valued.goldKarat, 24);
+  });
+
+  test('without the amount paid, gold adds to net worth but not to gain', () => {
+    const d = { ...newDraft(Category.gold, now), name: 'Locker', goldGrams: 10 };
+    assert.equal(validateDraft(d), null);
+    const bar = applyDraft(applyGoldRate(d, goldRate), null, undefined, now);
+    const paid = recompute(applyGoldRate(createAsset({ category: Category.gold, name: 'Coin', goldGrams: 1, investedAmount: 8000 }, now), goldRate), undefined, now);
+    assert.deepEqual([bar.investedAmount, bar.currentValuation], [0, 100000]);
+    assert.deepEqual(totals([bar, paid]), { value: 110000, invested: 108000, gain: 2000 });
   });
 
   test('gold has its own dashboard slice, and backups keep the holding', () => {
