@@ -1,0 +1,33 @@
+# Keeps rates/gold.json (the Hyderabad gold rate from 5paisa) current for the app. See tools/update-gold-rate.mjs.
+name: Gold rate
+
+on:
+  schedule:
+    - cron: '30 4 * * *' # 10:00 IST
+    - cron: '30 9 * * *' # 15:00 IST, in case the morning rate came late
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency: gold-rate
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: node tools/update-gold-rate.mjs
+      - name: Commit if the rate changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet -- rates/gold.json; then echo "No change."; exit 0; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m "Gold rate for $(jq -r .date rates/gold.json)" -- rates/gold.json
+          git pull --rebase --quiet && git push
+          # Pushes made by a workflow don't always start a Pages build, so ask for one.
+          gh api -X POST "repos/$GITHUB_REPOSITORY/pages/builds" --silent || echo "Pages build request failed; the next push will publish it."

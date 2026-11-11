@@ -2,6 +2,7 @@ import { financialYearStart, fromInputValue, fyLabel, toInputValue } from '../co
 import { categoryBySlug, categoryInfo, Category, COMPOUNDING, isFixedIncome, LIC_ENDOWMENT, NPS_TIERS, POLICY_TYPES } from '../core/categories.js';
 import { applyDraft, draftFromAsset, newDraft, npsAllocationTotal, validateDraft } from '../core/draft.js';
 import { fixedIncomeValuation } from '../core/fixedIncome.js';
+import { applyGoldRate, GOLD_SOURCE, KARATS } from '../core/gold.js';
 import { formatDate, inr, plainNumber } from '../core/format.js';
 import { renewalCalendar } from '../core/ics.js';
 import { latestNAV } from '../core/mfapi.js';
@@ -90,6 +91,7 @@ function institutionLabel(category) {
     case Category.p2p: return 'Platform';
     case Category.nps: return 'CRA / POP';
     case Category.realEstate: return 'Owner(s)';
+    case Category.gold: return 'Held with';
     default: return 'Institution';
   }
 }
@@ -97,6 +99,11 @@ function institutionLabel(category) {
 function mfNav(d) {
   if (d.latestNAV == null) return '';
   return html`${row('Latest NAV', inr(d.latestNAV, 4))}${d.unitsHeld != null ? row('Current value', inr(d.unitsHeld * d.latestNAV)) : ''}`;
+}
+
+function goldValue(d) {
+  if (d.goldRate == null) return row('Current value', 'Valued once today’s gold rate is fetched', 'muted-row');
+  return html`${row('Rate', `${inr(d.goldRate)}/g on ${formatDate(d.goldRateDate)}`)}${d.goldGrams != null ? row('Current value', inr(d.goldGrams * d.goldRate)) : ''}`;
 }
 
 function projection(d) {
@@ -218,6 +225,20 @@ function categorySections(d, { rates, now }) {
         <div data-derived="projection" ${d.hasStartDate ? '' : 'hidden'}>${projection(d)}</div>`;
     }
 
+    case Category.gold:
+      return group(
+        {
+          title: 'Holding',
+          foot: `Valued at today’s rate per gram for this purity (${GOLD_SOURCE}, before GST and making charges). Coins, bars and digital gold are 24K; jewellery is usually 22K. For digital gold, enter the grams shown in the app.`,
+        },
+        [
+          numberField('goldGrams', 'Weight', d.goldGrams, { digits: 4, suffix: 'g' }),
+          select('goldKarat', 'Purity', KARATS.map((k) => ({ value: k.karat, label: k.label })), d.goldKarat, 'int'),
+          amountField('investedAmount', 'Amount paid', d.investedAmount),
+          html`<div data-derived="gold-value">${goldValue(d)}</div>`,
+        ],
+      );
+
     case Category.p2p:
       return group({ title: 'Ledger', foot: 'Copy these totals from your LenDenClub dashboard. Outstanding balance is what counts towards net worth.' }, [
         amountField('investedAmount', 'Total principal deployed', d.investedAmount),
@@ -265,6 +286,7 @@ function draftFor({ store, params, state, now }) {
     if (!c) return null;
     state.draft = newDraft(c.raw, now);
   }
+  if (state.draft.category === Category.gold) applyGoldRate(state.draft, store.settings.goldRate);
   return state.draft;
 }
 
@@ -283,6 +305,7 @@ function update(form, ctx) {
     if (el) setHTML(el, fragment);
   };
   if (d.category === Category.mutualFund) derived('mf-nav', mfNav(d));
+  if (d.category === Category.gold) derived('gold-value', goldValue(applyGoldRate(d, ctx.store.settings.goldRate)));
   if (isFixedIncome(d.category)) {
     derived('projection', projection(d));
     form.querySelector('[data-derived="projection"]').hidden = !d.hasStartDate;
@@ -315,7 +338,7 @@ export const formView = {
         })}
         ${group({}, [
           textField('name', 'Name', d.name),
-          textField('institution', institutionLabel(d.category), d.institution),
+          textField('institution', institutionLabel(d.category), d.institution, d.category === Category.gold ? { placeholder: 'Paytm, Gullak, home locker…' } : {}),
         ])}
         ${categorySections(d, { rates: ctx.store.rates, now: ctx.now })}
         ${group({ title: 'Notes' }, textField('notes', 'Notes', d.notes, {
@@ -377,6 +400,7 @@ export const formView = {
       const saved = applyDraft(d, existing ? structuredClone(existing) : null, store.rates);
       await store.upsert(saved);
       ctx.goBack(existing ? `#/asset/${saved.id}` : '#/assets');
+      if (saved.category === Category.gold && saved.goldRate == null) store.refresh();
 
       if (saved.category === Category.insurance && saved.policyRenewalDate != null && saved.policyRenewalDate !== before) {
         toast(`Due ${formatDate(saved.policyRenewalDate)}. Add a reminder?`, {

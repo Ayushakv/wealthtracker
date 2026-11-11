@@ -27,6 +27,8 @@ export function assetSubtitle(a) {
       return join(a.interestRate != null && `${plainNumber(a.interestRate)}%`, a.maturityDate != null && `Matures ${formatDate(a.maturityDate)}`);
     case Category.nps:
       return join(a.npsTier ?? 'Tier 1', a.pran && `PRAN ${a.pran}`);
+    case Category.gold:
+      return join(a.institution, a.goldGrams != null && `${plainNumber(a.goldGrams, 4)} g`, `${a.goldKarat ?? 24}K`);
     default:
       return a.institution ?? categoryInfo(a.category).short;
   }

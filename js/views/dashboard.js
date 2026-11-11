@@ -1,6 +1,8 @@
 import { allocation, totals, upcomingRenewals } from '../core/assets.js';
 import { daysBetween, startOfDay } from '../core/calendar.js';
+import { Category } from '../core/categories.js';
 import { formatDate, formatRelative, inr, percent, signedCompact } from '../core/format.js';
+import { GOLD_SOURCE, rateForKarat } from '../core/gold.js';
 import { renewalCalendar } from '../core/ics.js';
 import { donut, mountDonut } from '../ui/donut.js';
 import { deliverFile } from '../ui/dom.js';
@@ -9,7 +11,7 @@ import { icon } from '../ui/icons.js';
 import { emptyState, pageHead, signClass } from './common.js';
 
 function refreshButton(store) {
-  return html`<button class="btn btn-icon" data-action="refresh" ${store.isRefreshing ? 'disabled' : ''} aria-label="Refresh NAVs" title="Refresh NAVs">
+  return html`<button class="btn btn-icon" data-action="refresh" ${store.isRefreshing ? 'disabled' : ''} aria-label="Refresh prices" title="Refresh prices">
     ${icon('refresh', store.isRefreshing ? 'spin' : '')}
   </button>`;
 }
@@ -60,12 +62,15 @@ function renewalsCard(policies, now) {
 }
 
 function statusFooter(store, now) {
-  const { lastRefresh, failures } = store.settings;
-  const failed = Object.keys(failures ?? {}).length;
+  const { lastRefresh, failures, goldRate } = store.settings;
+  const failed = Object.keys(failures ?? {}).filter((k) => k !== 'gold').length;
+  const hasGold = store.assets.some((a) => a.category === Category.gold);
   return html`
     <footer class="status muted small">
       ${lastRefresh ? html`<p>NAVs refreshed ${formatRelative(lastRefresh, now)}</p>` : ''}
+      ${hasGold && goldRate ? html`<p>Gold at ${inr(rateForKarat(goldRate))}/g for 24K (${GOLD_SOURCE}, ${formatDate(goldRate.date)})</p>` : ''}
       ${failed ? html`<p class="warn">${icon('warning')} ${failed} scheme(s) failed to update</p>` : ''}
+      ${hasGold && failures?.gold ? html`<p class="warn">${icon('warning')} ${failures.gold}</p>` : ''}
       ${navigator.onLine === false ? html`<p>${icon('info')} Offline — showing saved values</p>` : ''}
     </footer>`;
 }

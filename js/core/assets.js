@@ -51,6 +51,11 @@ export const FIELD_TYPES = Object.freeze({
   policySumAssured: 'number',
   annualPremium: 'number',
   policyRenewalDate: 'date',
+  goldGrams: 'number',
+  goldKarat: 'int',
+  /** ₹ per gram for this purity, and the day it's from (see core/gold.js). */
+  goldRate: 'number',
+  goldRateDate: 'date',
 });
 
 export const REQUIRED_FIELDS = ['id', 'name', 'category', 'investedAmount', 'currentValuation', 'lastUpdated'];
@@ -115,6 +120,10 @@ export function recompute(a, rates = RateSchedule.official, now = Date.now()) {
     case Category.mutualFund:
       if (a.unitsHeld != null && a.averageNAV != null) a.investedAmount = a.unitsHeld * a.averageNAV;
       if (a.unitsHeld != null && a.latestNAV != null) a.currentValuation = a.unitsHeld * a.latestNAV;
+      break;
+    case Category.gold:
+      if (a.goldGrams == null || a.goldRate == null) return a;
+      a.currentValuation = a.goldGrams * a.goldRate;
       break;
     case Category.insurance:
       if (hasSurrenderValue(a.policyType)) return a;

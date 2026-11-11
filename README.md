@@ -2,12 +2,12 @@
 
 A private, local-first net-worth tracker for Indian portfolios. It's a website you can install on your phone's Home Screen like an app. Plain HTML, CSS and JavaScript, with no dependencies and no build step.
 
-Tracks bank accounts, real estate, mutual funds (live NAVs from mfapi.in), PPF (month-wise interest using the official rate history), NPS, bonds, fixed deposits, P2P (LenDenClub) and insurance (LIC surrender value; health and term cover are tracked but don't count towards net worth).
+Tracks bank accounts, real estate, mutual funds (live NAVs from mfapi.in), PPF (month-wise interest using the official rate history), NPS, bonds, fixed deposits, P2P (LenDenClub), gold (physical and digital, valued at the day's Hyderabad rate) and insurance (LIC surrender value; health and term cover are tracked but don't count towards net worth).
 
 ## Where your data lives
 
 - Everything stays in this browser's storage (IndexedDB) on this device. Nothing is sent to a server, unless you turn on sync (below).
-- The only other network request is to `api.mfapi.in`, and it sends just the AMFI scheme code to fetch the latest NAV.
+- The only other network request is to `api.mfapi.in`, and it sends just the AMFI scheme code to fetch the latest NAV. The gold rate comes from this site itself (`rates/gold.json`), so fetching it sends nothing.
 - With a passcode turned on, data is encrypted at rest (AES-GCM-256, key derived with PBKDF2-SHA256 at 600,000 iterations). If you forget the passcode, the data can't be recovered, so keep a backup.
 - **CAS import** reads the PDF in the browser; the file and its password never leave the device.
 - **Backups:** Settings → Export Backup saves a plain JSON file. It's the same format as the earlier iPhone app, so old backups import directly. Importing merges by asset ID, so importing the same file twice doesn't create duplicates.
@@ -101,6 +101,14 @@ Safari can delete a website's storage after 7 days without a visit. Home Screen 
 
 Websites can't reliably send notifications on iPhone. Instead, **Add to Calendar** creates a calendar file (.ics) with each policy's renewal date and alerts 30, 15 and 3 days before, at 9 am. Your calendar app shows those alerts even when this app is closed. Add it again after a due date changes.
 
+## Gold rate
+
+Gold holdings are entered in grams with their purity (24K, 22K or 18K) and valued at grams × that day's rate per gram in Hyderabad from [5paisa](https://www.5paisa.com/commodity-trading/gold/hyderabad), before GST and making charges. For digital gold (Paytm, Gullak and so on), add one holding per app with the grams it shows.
+
+5paisa has no API and its page can't be read by a browser from another site, so the **Gold rate** GitHub Action (`.github/workflows/gold-rate.yml`) runs `tools/update-gold-rate.mjs` at 10:00 and 15:00 IST. It reads the rates from the page, checks them against the page's own last-10-days table, and commits `rates/gold.json` when they change. The app reads that file on Refresh. If 5paisa changes its page, the script stops with an error rather than guessing, and the app keeps the last rate.
+
+GitHub turns off scheduled workflows in a public repository after 60 days without activity. If the rate date on Net Worth stops moving, re-enable the workflow under Actions → Gold rate. You can also run it by hand from there.
+
 ## mfapi.in note
 
 mfapi.in's cache strips the CORS header from cached responses, so browsers would block them. Each request adds a unique `?t=` query string to get a fresh response. If NAV refresh starts failing in the browser but works with `curl`, check this first.
@@ -118,5 +126,6 @@ js/app.js    router and shell
 vendor/      pdf.js 4.10.38 (Apache 2.0), loaded only for CAS import
 data/        ISIN → AMFI scheme code map, generated from AMFI's NAVAll.txt
 tests/       unit tests; fixtures/ has synthetic password-protected CAMS and NSDL statements (password ABCDE1234F)
-tools/       local server, Chrome end-to-end test, ISIN map generator
+rates/       gold.json, the day's gold rate, written by the Gold rate Action
+tools/       local server, Chrome end-to-end test, ISIN map generator, gold rate updater
 ```

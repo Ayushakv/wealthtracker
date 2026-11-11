@@ -29,6 +29,7 @@
   --s4: #eda100;
   --s5: #e87ba4;
   --s6: #008300;
+  --s7: #6250d6;
 
   --radius: 12px;
   --gutter: max(16px, env(safe-area-inset-left));
@@ -63,6 +64,7 @@
     --s4: #c98500;
     --s5: #d55181;
     --s6: #008300;
+    --s7: #9085e9;
   }
 }
 
@@ -463,6 +465,7 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: 3px; }
 .s4 { fill: var(--s4); background: var(--s4); }
 .s5 { fill: var(--s5); background: var(--s5); }
 .s6 { fill: var(--s6); background: var(--s6); }
+.s7 { fill: var(--s7); background: var(--s7); }
 
 .donut-center {
   position: absolute;

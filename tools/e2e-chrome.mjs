@@ -103,7 +103,13 @@ const cors = [
   { name: 'Access-Control-Allow-Headers', value: 'authorization, content-type, accept, x-github-api-version' },
   { name: 'Access-Control-Allow-Methods', value: 'GET, POST, PATCH' },
 ];
+// The gold rate file, fixed so values are predictable whatever the Action last committed.
+const GOLD_RATE = { source: '5paisa', city: 'Hyderabad', date: '2026-11-10', perGram: { 24: 10000, 22: 9160, 18: 7500 } };
 cdp.on('Fetch.requestPaused', ({ requestId, request }) => {
+  if (request.url.includes('/rates/gold.json')) {
+    const body = Buffer.from(JSON.stringify(GOLD_RATE)).toString('base64');
+    return send('Fetch.fulfillRequest', { requestId, responseCode: 200, responseHeaders: [{ name: 'Content-Type', value: 'application/json' }], body });
+  }
   if (request.method === 'OPTIONS') return send('Fetch.fulfillRequest', { requestId, responseCode: 204, responseHeaders: cors });
   const body = request.postData ?? (request.postDataEntries ? Buffer.concat(request.postDataEntries.map((e) => Buffer.from(e.bytes ?? '', 'base64'))).toString() : undefined);
   const res = github.handle({ method: request.method, url: request.url, headers: request.headers, body });
@@ -114,7 +120,7 @@ cdp.on('Fetch.requestPaused', ({ requestId, request }) => {
     body: Buffer.from(JSON.stringify(res.body)).toString('base64'),
   });
 });
-await send('Fetch.enable', { patterns: [{ urlPattern: 'https://api.github.com/*' }] });
+await send('Fetch.enable', { patterns: [{ urlPattern: 'https://api.github.com/*' }, { urlPattern: '*/rates/gold.json*' }] });
 /** Another device's view of the synced data: decrypts the gist. */
 async function readSyncedCopy() {
   const [gist] = github.gists.values();
@@ -461,6 +467,41 @@ try {
   await go('#/assets');
   await waitFor(`${ROWS} === ${assetCount + 17}`, 'no PPF duplicate');
 
+  step('Gold: grams valued at the day’s rate for their purity');
+  await go('#/new/gold');
+  await waitFor(`document.querySelector('[name="goldGrams"]')`, 'gold form');
+  assert(await evaluate(`document.querySelector('[name="goldKarat"]').value === '24'`), '24K by default');
+  assert((await text('[data-derived="gold-value"]')).includes('Valued once today’s gold rate is fetched'), 'no rate yet');
+  await fill('[name="name"]', 'Digital gold');
+  await fill('[name="institution"]', 'Example app');
+  await fill('[name="goldGrams"]', '2.5');
+  await fill('[name="investedAmount"]', '20000');
+  await shot('gold-form', { full: true });
+  await click('[data-save]');
+  await waitFor(`location.hash === '#/assets'`, 'back after saving gold');
+  // Saving the first gold holding fetches the rate (₹10,000/g for 24K here) and values it.
+  await waitFor(`${ROWS} === ${assetCount + 18} && [...document.querySelectorAll('a.list-row')].some((r) => r.textContent.includes('Example app · 2.5 g · 24K') && r.textContent.includes('₹25,000'))`, 'gold listed at today’s rate', 15_000);
+  const goldHref = await evaluate(`[...document.querySelectorAll('a.list-row')].find((r) => r.textContent.includes('Digital gold'))?.getAttribute('href')`);
+  await go(goldHref);
+  await waitFor(`document.querySelector('main').textContent.includes('Rate date')`, 'gold detail');
+  const goldDetail = await text('main');
+  assert(goldDetail.includes('2.5 g') && goldDetail.includes('24K (99.9%)') && goldDetail.includes('₹10,000/g') && goldDetail.includes('10 Nov 2026') && goldDetail.includes('₹25,000'), `gold weight, purity, rate and value (${goldDetail})`);
+  await shot('gold-detail', { full: true });
+  await go('#/new/gold');
+  await waitFor(`document.querySelector('[data-derived="gold-value"]')?.textContent.includes('₹10,000/g')`, 'rate known in the form');
+  await fill('[name="name"]', 'Chain');
+  await fill('[name="goldGrams"]', '10');
+  await fill('[name="goldKarat"]', '22');
+  await waitFor(`document.querySelector('[data-derived="gold-value"]').textContent.includes('₹9,160/g') && document.querySelector('[data-derived="gold-value"]').textContent.includes('₹91,600')`, '22K rate and value');
+  await click('[data-save]');
+  await waitFor(`location.hash === '${goldHref}'`, 'back after saving the chain');
+  await go('#/dashboard');
+  await waitFor(`document.querySelector('.status')?.textContent.includes('Gold at ₹10,000/g for 24K (5paisa · Hyderabad, 10 Nov 2026)')`, 'gold rate on Net Worth');
+  assert(await evaluate(`document.querySelector('.legend li[data-slice="gold"]')?.textContent.includes('₹1.17 L')`), 'gold slice on the donut');
+  await shot('dashboard-gold', { full: true });
+  await go('#/assets');
+  await waitFor(`${ROWS} === ${assetCount + 19}`, 'two gold holdings');
+
   step('Sync: set up with a GitHub token → an encrypted gist is created');
   await go('#/settings');
   await waitFor(`document.querySelector('[data-action="sync-setup"]')`, 'sync section');
@@ -482,7 +523,7 @@ try {
   await waitFor(`document.querySelector('[data-sync-status]')?.textContent.startsWith('Synced')`, 'synced status');
   assert(github.gists.size === 1, 'one gist');
   const gistText = [...github.gists.values()][0].files[SYNC_FILE].content;
-  assert(!/renamed|PPF|HDFC|Savings/.test(gistText), 'gist holds only ciphertext');
+  assert(!/renamed|PPF|HDFC|Savings|Digital gold/.test(gistText), 'gist holds only ciphertext');
   await shot('settings-sync-on', { full: true });
 
   step('Sync: a change made on another device arrives');
@@ -493,7 +534,7 @@ try {
   await click('[data-action="sync-now"]');
   await waitFor(`document.querySelector('#toast.show')?.textContent === 'Synced.'`, 'synced toast');
   await go('#/assets');
-  await waitFor(`document.querySelector('main').textContent.includes('PPF — from the laptop') && ${ROWS} === ${assetCount + 18}`, 'remote rename and new asset');
+  await waitFor(`document.querySelector('main').textContent.includes('PPF — from the laptop') && ${ROWS} === ${assetCount + 20}`, 'remote rename and new asset');
 
   step('Sync: an edit here goes up on its own');
   await go(ppfHref);
@@ -532,9 +573,9 @@ try {
   await shot('sync-passphrase-wrong');
   await fill('dialog [name="passphrase"]', SYNC_PASSPHRASE);
   await click('dialog [data-ok]');
-  await waitFor(`document.querySelector('#toast.show')?.textContent.startsWith('Sync is on. ${assetCount + 18} assets')`, 'data restored', 15_000);
+  await waitFor(`document.querySelector('#toast.show')?.textContent.startsWith('Sync is on. ${assetCount + 20} assets')`, 'data restored', 15_000);
   await go('#/assets');
-  await waitFor(`${ROWS} === ${assetCount + 18} && document.querySelector('main').textContent.includes('PPF — edited on the phone')`, 'every asset back');
+  await waitFor(`${ROWS} === ${assetCount + 20} && document.querySelector('main').textContent.includes('PPF — edited on the phone')`, 'every asset back');
   assert(github.gists.size === 1, 'still one gist');
 
   step('Turn on passcode → data encrypted at rest');

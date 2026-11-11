@@ -10,6 +10,7 @@ export const Category = Object.freeze({
   ppf: 'Public Provident Fund (PPF)',
   nps: 'National Pension System (NPS)',
   insurance: 'Insurance & LIC',
+  gold: 'Gold',
 });
 
 export const Bucket = Object.freeze({
@@ -19,6 +20,7 @@ export const Bucket = Object.freeze({
   p2p: 'p2p',
   liquidCash: 'liquidCash',
   insurance: 'insurance',
+  gold: 'gold',
 });
 
 /** Display order for lists and the add menu. */
@@ -31,6 +33,7 @@ export const CATEGORIES = [
   { raw: Category.p2p, slug: 'p2p', short: 'P2P', icon: 'people', bucket: Bucket.p2p },
   { raw: Category.ppf, slug: 'ppf', short: 'PPF', icon: 'shield', bucket: Bucket.sovereignDebt },
   { raw: Category.nps, slug: 'nps', short: 'NPS', icon: 'pension', bucket: Bucket.market },
+  { raw: Category.gold, slug: 'gold', short: 'Gold', icon: 'gold', bucket: Bucket.gold },
   { raw: Category.insurance, slug: 'insurance', short: 'Insurance', icon: 'umbrella', bucket: Bucket.insurance },
 ];
 
@@ -64,10 +67,14 @@ export function upgradeCategory(a) {
   return true;
 }
 
-/** Dashboard slices. `series` is a fixed palette slot so a bucket keeps its color when others are empty. */
+/**
+ * Dashboard slices. `series` is a fixed palette slot so a bucket keeps its color when others are empty. Gold (slot 7,
+ * violet) sits between Market and Sovereign Debt so it never touches Real Estate's blue around the ring.
+ */
 export const BUCKETS = [
   { key: Bucket.realEstate, label: 'Real Estate', series: 1 },
   { key: Bucket.market, label: 'Market (MF + NPS)', series: 2 },
+  { key: Bucket.gold, label: 'Gold', series: 7 },
   { key: Bucket.sovereignDebt, label: 'Sovereign Debt (PPF, Bonds, FDs)', series: 3 },
   { key: Bucket.p2p, label: 'P2P (LenDenClub)', series: 4 },
   { key: Bucket.liquidCash, label: 'Liquid Cash', series: 5 },

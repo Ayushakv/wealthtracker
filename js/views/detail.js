@@ -2,6 +2,7 @@ import { countsTowardsNetWorth, createEntry, fixedIncomeFor, gain, gainFraction,
 import { fromInputValue, parts, toInputValue } from '../core/calendar.js';
 import { Category, DEFAULT_COMPOUNDING } from '../core/categories.js';
 import { isDematAccount } from '../core/demat.js';
+import { GOLD_SOURCE, karatLabel } from '../core/gold.js';
 import { formatDate, formatDateTime, formatMonth, inr, inrCompact, number, percent, plainNumber } from '../core/format.js';
 import { confirmDialog, parseNumber, showDialog } from '../ui/dom.js';
 import { html } from '../ui/html.js';
@@ -79,6 +80,23 @@ function categoryDetails(a, store, now) {
 
     case Category.ppf:
       return ppfSections(a, store, now);
+
+    case Category.gold:
+      return group(
+        {
+          title: 'Holding',
+          foot:
+            a.goldRate == null
+              ? 'Valued at the amount paid until today’s gold rate is fetched. Tap Refresh on Net Worth.'
+              : `Rate per gram from ${GOLD_SOURCE}, before GST and making charges. It updates each time the app refreshes.`,
+        },
+        [
+          opt('Weight', a.goldGrams, (v) => `${plainNumber(v, 4)} g`),
+          row('Purity', karatLabel(a.goldKarat ?? 24)),
+          opt('Rate', a.goldRate, (v) => `${inr(v)}/g`),
+          opt('Rate date', a.goldRateDate, formatDate),
+        ],
+      );
 
     case Category.insurance:
       return group({ title: 'Policy' }, [

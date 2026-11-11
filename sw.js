@@ -1,7 +1,7 @@
 // Offline support: every app file is cached on install and served cache-first.
 // The PDF reader (vendor/) and ISIN map (data/) are large and only needed for CAS imports, so they are
 // cached the first time they are used instead. Bump VERSION whenever any of these files change.
-const VERSION = 'wt-v13';
+const VERSION = 'wt-v14';
 const LAZY = /\/(vendor|data)\//;
 
 const PRECACHE = [
@@ -24,6 +24,7 @@ const PRECACHE = [
   'js/core/draft.js',
   'js/core/fixedIncome.js',
   'js/core/format.js',
+  'js/core/gold.js',
   'js/core/ics.js',
   'js/core/mfapi.js',
   'js/core/nps.js',
@@ -73,8 +74,8 @@ self.addEventListener('message', (event) => {
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
-  // NAV lookups (mfapi.in) and anything else off-site go straight to the network.
-  if (request.method !== 'GET' || url.origin !== self.location.origin) return;
+  // NAV lookups (mfapi.in), anything else off-site and the daily gold rate (rates/) go straight to the network.
+  if (request.method !== 'GET' || url.origin !== self.location.origin || url.pathname.includes('/rates/')) return;
   event.respondWith(
     (async () => {
       const cache = await caches.open(VERSION);

@@ -1,6 +1,7 @@
 import { addYears, financialYearStart } from './calendar.js';
 import { Category, DEFAULT_COMPOUNDING, isFixedIncome, LIC_ENDOWMENT } from './categories.js';
 import { createAsset, recompute } from './assets.js';
+import { DEFAULT_KARAT } from './gold.js';
 
 /**
  * Editable copy of an asset, so a form can be cancelled without touching the store.
@@ -45,6 +46,10 @@ export function newDraft(category, now = Date.now()) {
     annualPremium: null,
     hasRenewalDate: true,
     policyRenewalDate: addYears(now, 1),
+    goldGrams: null,
+    goldKarat: DEFAULT_KARAT,
+    goldRate: null,
+    goldRateDate: null,
   };
 }
 
@@ -89,6 +94,10 @@ export function draftFromAsset(a, now = Date.now()) {
     annualPremium: num(a.annualPremium),
     hasRenewalDate: a.policyRenewalDate != null,
     policyRenewalDate: a.policyRenewalDate ?? d.policyRenewalDate,
+    goldGrams: num(a.goldGrams),
+    goldKarat: a.goldKarat ?? DEFAULT_KARAT,
+    goldRate: num(a.goldRate),
+    goldRateDate: num(a.goldRateDate),
   });
   return d;
 }
@@ -119,6 +128,9 @@ export function validateDraft(d) {
       }
       if (d.interestRate == null) return 'Enter the interest rate.';
       if (d.hasMaturityDate && d.maturityDate < d.startDate) return 'Maturity must be after the start date.';
+      break;
+    case Category.gold:
+      if (!((d.goldGrams ?? 0) > 0)) return 'Enter the weight in grams.';
       break;
     case Category.nps: {
       const total = npsAllocationTotal(d);
@@ -198,6 +210,12 @@ export function applyDraft(d, asset, rates, now = Date.now()) {
       a.annualPremium = opt(d.annualPremium);
       a.policyRenewalDate = d.hasRenewalDate ? d.policyRenewalDate : undefined;
       a.maturityDate = d.policyType === LIC_ENDOWMENT && d.hasMaturityDate ? d.maturityDate : undefined;
+      break;
+    case Category.gold:
+      a.goldGrams = d.goldGrams;
+      a.goldKarat = d.goldKarat;
+      a.goldRate = opt(d.goldRate);
+      a.goldRateDate = opt(d.goldRateDate);
       break;
   }
   a.entries ??= [];

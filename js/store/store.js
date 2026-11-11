@@ -2,6 +2,7 @@ import { amfiCodes, recompute } from '../core/assets.js';
 import { exportBackup, mergeBackup, parseBackup } from '../core/backup.js';
 import { quarterStart } from '../core/calendar.js';
 import { Category, upgradeCategory } from '../core/categories.js';
+import { applyGoldRate, fetchGoldRate } from '../core/gold.js';
 import { latestNAVs } from '../core/mfapi.js';
 import { OFFICIAL_HISTORY, RateSchedule } from '../core/ppf.js';
 import { mergeVaults, readSyncPayload, same, syncPayload } from '../core/sync.js';
@@ -349,18 +350,25 @@ export class Store extends EventTarget {
 
   // MARK: - Refresh (port of PortfolioRefresher)
 
-  /** Pulls fresh NAVs and recomputes rule-based valuations (PPF, FDs/bonds). */
-  async refresh(fetchImpl) {
+  /** Pulls fresh NAVs and the gold rate, and recomputes rule-based valuations (PPF, FDs/bonds, gold). */
+  async refresh(fetchImpl = this.#fetch) {
     if (this.isRefreshing || this.status !== 'ready') return;
     this.isRefreshing = true;
     this.#emit();
     try {
       const codes = amfiCodes(this.assets);
-      const results = codes.length ? await latestNAVs(codes, fetchImpl) : new Map();
+      const hasGold = this.assets.some((a) => a.category === Category.gold);
+      const [results, gold] = await Promise.all([
+        codes.length ? latestNAVs(codes, fetchImpl) : new Map(),
+        hasGold ? fetchGoldRate(fetchImpl).then((rate) => ({ rate }), (error) => ({ error })) : null,
+      ]);
       if (this.status !== 'ready') return; // locked while waiting on the network
       const failures = {};
+      if (gold?.rate) this.settings.goldRate = gold.rate;
+      else if (gold) failures.gold = gold.error.message;
       const rates = this.rates;
       for (const a of this.assets) {
+        if (a.category === Category.gold) applyGoldRate(a, this.settings.goldRate);
         const r = a.category === Category.mutualFund && a.amfiCode ? results.get(a.amfiCode) : null;
         if (r?.ok) {
           a.latestNAV = r.quote.nav;
