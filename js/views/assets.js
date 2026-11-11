@@ -10,8 +10,12 @@ import { emptyState, pageHead } from './common.js';
 /** Category filter survives navigating into an asset and back, and so do expanded groups. */
 let filter = '';
 const expanded = new Set();
-/** Long groups show this many assets until expanded (a group of one more than this shows in full). */
+/**
+ * Long groups show this many assets until expanded (a group of one more than this shows in full). Sections within a
+ * category (Corporate Bonds, Securitised Instruments…) show fewer, so the whole category stays short.
+ */
 const PREVIEW = 5;
+const SUBSECTION_PREVIEW = 2;
 
 export function assetSubtitle(a) {
   const join = (...parts) => parts.filter(Boolean).join(' · ');
@@ -75,12 +79,13 @@ function subgroups(c, items) {
 
 /** A run of assets; a long one shows the first few and a button for the rest (unless a category filter is picked). */
 function assetRun({ key, name, items }, titled) {
-  const long = !filter && items.length > PREVIEW + 1;
+  const preview = titled ? SUBSECTION_PREVIEW : PREVIEW;
+  const long = !filter && items.length > preview + 1;
   const open = !long || expanded.has(key);
   return html`${titled
     ? html`<li class="sub-heading split"><span>${name} <span class="count">${items.length}</span></span><span class="num">${inrCompact(valueOf(items))}</span></li>`
-    : ''}${(open ? items : items.slice(0, PREVIEW)).map(assetRow)}${long
-    ? html`<li><button class="row row-button" data-action="toggle-group" data-group="${key}" data-total="${items.length}" aria-expanded="${String(open)}">
+    : ''}${(open ? items : items.slice(0, preview)).map(assetRow)}${long
+    ? html`<li><button class="row row-button" data-action="toggle-group" data-group="${key}" data-total="${items.length}" data-shown="${preview}" aria-expanded="${String(open)}">
         ${icon('chevron', open ? 'chev-up' : 'chev-down')}${open ? 'Show fewer' : `Show all ${items.length}`}</button></li>`
     : ''}`;
 }

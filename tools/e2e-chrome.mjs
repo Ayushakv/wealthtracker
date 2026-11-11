@@ -228,8 +228,8 @@ try {
   step('Assets list and filter');
   await go('#/assets');
   await waitFor(`document.querySelector('h1')?.textContent === 'Assets' && document.querySelector('a.list-row')`, 'asset list');
-  // Every asset listed, counting those folded away in long groups (which show five and a "Show all" button).
-  const ROWS = `document.querySelectorAll('a.list-row').length + [...document.querySelectorAll('[data-action="toggle-group"][aria-expanded="false"]')].reduce((n, b) => n + Number(b.dataset.total) - 5, 0)`;
+  // Every asset listed, counting those folded away in long groups (which show a few and a "Show all" button).
+  const ROWS = `document.querySelectorAll('a.list-row').length + [...document.querySelectorAll('[data-action="toggle-group"][aria-expanded="false"]')].reduce((n, b) => n + Number(b.dataset.total) - Number(b.dataset.shown), 0)`;
   const assetCount = await evaluate(ROWS);
   await shot('assets', { full: true });
   await evaluate(`(() => { const s = document.querySelector('[data-change="filter"]'); s.value = 'ppf'; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
@@ -420,12 +420,16 @@ try {
   assert(!(await text('main')).includes('Matured NCD'), 'stale bond gone');
   assert(await evaluate(`${fdGroup}.textContent.includes('Bank FD 1') && !${groupNamed('Bonds')}.textContent.includes('Bank FD')`), 'old combined-category FDs moved to Fixed Deposits');
 
-  step('Long sections show five, then all');
+  step('Long sections show five (bond sections two), then all');
   const other = `[...document.querySelectorAll('[data-action="toggle-group"]')].find((b) => b.dataset.group === 'fd')`;
   assert(await evaluate(`${other}?.textContent.trim() === 'Show all 9' && ${other}.getAttribute('aria-expanded') === 'false'`), 'Fixed Deposits folds to five');
+  const corporate = `[...document.querySelectorAll('[data-action="toggle-group"]')].find((b) => b.dataset.group === 'bonds:Corporate Bonds')`;
+  assert(await evaluate(`${corporate}?.textContent.trim() === 'Show all 4' && ${corporate}.closest('ul').querySelectorAll('a.list-row').length === 4`), 'Corporate Bonds folds to two (with one each in the sections around it)');
   await shot('assets-collapsed', { full: true });
   await evaluate(`${other}.click()`);
-  await waitFor(`${other}?.textContent.includes('Show fewer') && document.querySelectorAll('a.list-row').length === ${assetCount + 17}`, 'section expanded');
+  await waitFor(`${other}?.textContent.includes('Show fewer')`, 'FDs expanded');
+  await evaluate(`${corporate}.click()`);
+  await waitFor(`${corporate}?.textContent.includes('Show fewer') && document.querySelectorAll('a.list-row').length === ${assetCount + 17}`, 'sections expanded');
   await shot('assets-expanded', { full: true });
   await go('#/assets');
 
