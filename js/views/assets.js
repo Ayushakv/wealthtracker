@@ -50,6 +50,9 @@ function assetRow(a) {
   </li>`;
 }
 
+/** Total weight of gold holdings, whatever their purity. */
+const gramsOf = (items) => plainNumber(items.reduce((s, a) => s + (a.goldGrams ?? 0), 0), 4);
+
 const valueOf = (items) => items.filter(countsTowardsNetWorth).reduce((s, a) => s + a.currentValuation, 0);
 
 /**
@@ -126,7 +129,7 @@ export const assetsView = {
       return html`<section class="group">
         <h2 class="group-title split">
           <span>${icon(c.icon)} ${c.raw}${items.length > PREVIEW + 1 ? html` <span class="count">${items.length}</span>` : ''}</span>
-          <span class="num">${inrCompact(valueOf(items))}</span>
+          <span class="num">${c.raw === Category.gold ? html`<span class="muted" data-gold-grams>${gramsOf(items)} g · </span>` : ''}${inrCompact(valueOf(items))}</span>
         </h2>
         <ul class="group-body plain-list">${runs.map((run) => assetRun(run, runs.length > 1))}</ul>
       </section>`;

@@ -501,6 +501,9 @@ try {
   await shot('dashboard-gold', { full: true });
   await go('#/assets');
   await waitFor(`${ROWS} === ${assetCount + 19}`, 'two gold holdings');
+  assert((await text('[data-gold-grams]')).startsWith('12.5 g'), `total grams in the Gold header (${await text('[data-gold-grams]')})`);
+  await evaluate(`document.querySelector('[data-gold-grams]').closest('section').scrollIntoView()`);
+  await shot('assets-gold');
 
   step('Sync: set up with a GitHub token → an encrypted gist is created');
   await go('#/settings');
