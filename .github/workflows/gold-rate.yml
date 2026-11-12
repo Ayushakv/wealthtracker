@@ -2,9 +2,10 @@
 name: Gold rate
 
 on:
+  # Hourly from 08:47 to 18:47 IST. GitHub starts scheduled runs late or skips them when busy, so one or two a day
+  # isn't enough; runs that find the same rate commit nothing. Off the hour, when GitHub is least busy.
   schedule:
-    - cron: '30 4 * * *' # 10:00 IST
-    - cron: '30 9 * * *' # 15:00 IST, in case the morning rate came late
+    - cron: '17 3-13 * * *'
   workflow_dispatch:
 
 permissions:

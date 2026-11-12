@@ -105,7 +105,7 @@ Websites can't reliably send notifications on iPhone. Instead, **Add to Calendar
 
 Gold holdings are entered in grams with their purity (24K, 22K or 18K) and valued at grams × that day's rate per gram in Hyderabad from [5paisa](https://www.5paisa.com/commodity-trading/gold/hyderabad), before GST and making charges. For digital gold (Paytm, Gullak and so on), add one holding per app with the grams it shows.
 
-5paisa has no API and its page can't be read by a browser from another site, so the **Gold rate** GitHub Action (`.github/workflows/gold-rate.yml`) runs `tools/update-gold-rate.mjs` at 10:00 and 15:00 IST. It reads the rates from the page, checks them against the page's own last-10-days table, and commits `rates/gold.json` when they change. The app reads that file on Refresh. If 5paisa changes its page, the script stops with an error rather than guessing, and the app keeps the last rate.
+5paisa has no API and its page can't be read by a browser from another site, so the **Gold rate** GitHub Action (`.github/workflows/gold-rate.yml`) runs `tools/update-gold-rate.mjs` every hour from about 9:00 to 19:00 IST (GitHub sometimes starts scheduled runs late or skips one). It reads the rates from the page, checks them against the page's own last-10-days table, and commits `rates/gold.json` when they change. The app reads that file on Refresh. If 5paisa changes its page, the script stops with an error rather than guessing, and the app keeps the last rate.
 
 GitHub turns off scheduled workflows in a public repository after 60 days without activity. If the rate date on Net Worth stops moving, re-enable the workflow under Actions → Gold rate. You can also run it by hand from there.
 
