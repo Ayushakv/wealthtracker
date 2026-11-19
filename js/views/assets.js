@@ -96,7 +96,8 @@ function addMenu() {
     <div class="menu-items" role="menu">
       <a role="menuitem" href="#/assets" data-action="import-cas">${icon('import')}<span>Import Mutual Funds or Bonds from CAS</span></a>
       <a role="menuitem" href="#/assets" data-action="import-nps">${icon('import')}<span>Import NPS Statement</span></a>
-      <a role="menuitem" href="#/assets" class="menu-sep-after" data-action="import-ppf">${icon('import')}<span>Import PPF Statement</span></a>
+      <a role="menuitem" href="#/assets" data-action="import-ppf">${icon('import')}<span>Import PPF Statement</span></a>
+      <a role="menuitem" href="#/assets" class="menu-sep-after" data-action="import-lic">${icon('import')}<span>Import LIC Policy Bond</span></a>
       ${CATEGORIES.map((c) => html`<a role="menuitem" href="#/new/${c.slug}">${icon(c.icon)}<span>${c.raw}</span></a>`)}
     </div>
   </details>`;
@@ -168,6 +169,10 @@ export const assetsView = {
       return importCAS(ctx);
     },
     'import-ppf'(el, ctx) {
+      el.closest('details').open = false;
+      return importCAS(ctx);
+    },
+    'import-lic'(el, ctx) {
       el.closest('details').open = false;
       return importCAS(ctx);
     },

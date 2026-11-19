@@ -1,0 +1,60 @@
+<!doctype html>
+<!--
+  Synthetic LIC policy bond (made-up plan, policyholder, policy number and address) in the bilingual two-column
+  layout of LIC's Schedule page, for the PDF tests and the end-to-end test. Values sit on lines apart from their
+  labels the way LIC prints them. Rebuild sample-lic.pdf with:
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless --no-pdf-header-footer \
+      --print-to-pdf=tests/fixtures/sample-lic.pdf tests/fixtures/sample-lic.html
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Policy Bond</title>
+<style>
+  @page { size: A4; margin: 15mm; }
+  body { font: 8pt Helvetica, Arial, sans-serif; color: #000; }
+  p { margin: 0 0 2mm; }
+  .l { display: grid; grid-template-columns: 62mm 28mm 62mm 28mm; min-height: 4.2mm; }
+  .r { display: grid; grid-template-columns: 8mm 44mm 26mm 22mm 20mm 24mm 24mm; min-height: 4.2mm; }
+  .foot { display: grid; grid-template-columns: 80mm 40mm 40mm; margin-top: 6mm; }
+  .page { break-after: page; }
+  h1 { font-size: 10pt; margin: 0 0 3mm; }
+</style>
+</head>
+<body>
+<div class="page">
+  <p>Dear Policyholder,</p>
+  <p>Thank you for choosing us. We enclose your policy document. Please go through the terms and conditions of the Policy.</p>
+  <p>Life Insurance Corporation of India</p>
+  <div class="foot"><span>LIC’s Jeevan Sample Plan</span><span>Page 1 of 2</span><span>Plan No -999</span></div>
+</div>
+<div>
+  <h1>DIVISIONAL OFFICE: X100 &nbsp;&nbsp; SCHEDULE &nbsp;&nbsp; BRANCH OFFICE: 000</h1>
+  <div class="l"><span>यू आइ एन</span><span></span><span>पॉलिसी संख्या :</span><span></span></div>
+  <div class="l"><span>999N999V01</span><span></span><span></span><span></span></div>
+  <div class="l"><span>UIN</span><span></span><span>Policy Number</span><span>900000001</span></div>
+  <div class="l"><span>Plan &amp; Policy Term</span><span>999 20</span><span>Premium Paying Term</span><span>12</span></div>
+  <div class="l"><span>Date of Commencement of Policy</span><span>15-01-2020</span><span>Date of Commencement of Risk</span><span>15-01-2020</span></div>
+  <div class="l"><span>पॉलिसी जारी करने की तिथि :</span><span></span><span>Due date of Payment of Last</span><span></span></div>
+  <div class="l"><span></span><span></span><span></span><span>15-12-2031</span></div>
+  <div class="l"><span>Date of Issuance of Policy</span><span>20-01-2020</span><span>premium for Base Policy</span><span></span></div>
+  <div class="l"><span>मूल बीमा राशि(रु.)</span><span>500000</span><span>मूल पॉलिसी के लिए किस्त प्रीमियम (रु.)</span><span></span></div>
+  <div class="l"><span>Basic Sum Assured ( Rs)</span><span></span><span>Instalment Premium for Base Policy (Rs)</span><span>5100</span></div>
+  <div class="l"><span>प्रीमियम भुगतान की विधि</span><span>Mly</span><span>कुल किस्त प्रीमियम (रु.)</span><span></span></div>
+  <div class="l"><span>Mode of payment of premium</span><span></span><span></span><span></span></div>
+  <div class="l"><span></span><span></span><span></span><span>5225.00</span></div>
+  <div class="l"><span></span><span></span><span>Total Instalment Premium (Rs): (Taxes, if any, as applicable from time to</span><span></span></div>
+  <div class="l"><span></span><span></span><span>time are charged extra</span><span></span></div>
+  <div class="l"><span>Due date of Premium</span><span>15th</span><span>Date of Maturity</span><span>15-01-2040</span></div>
+  <p>&nbsp;</p>
+  <p>Details of Rider opted :</p>
+  <div class="r"><span>Sr</span><span>Rider Opted</span><span>Date of Commencement</span><span>Rider Sum Assured</span><span>Instalment Premium</span><span>Last premium</span><span>Date of expiry</span></div>
+  <div class="r"><span>1</span><span>ADDB Rdr 999B999V01</span><span>15-01-2020</span><span>500000</span><span>125</span><span>15-12-2031</span><span>15-01-2040</span></div>
+  <p>&nbsp;</p>
+  <p>Name and address of Proposer</p>
+  <p>A N POLICYHOLDER</p>
+  <p>12 EXAMPLE ROAD, PUNE 411001</p>
+  <div class="foot"><span>LIC’s Jeevan Sample Plan</span><span>Page 2 of 2</span><span>Plan No -999</span></div>
+</div>
+</body>
+</html>

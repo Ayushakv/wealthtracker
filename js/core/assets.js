@@ -2,6 +2,7 @@ import { addDays, financialYearStart, startOfDay } from './calendar.js';
 import { BUCKETS, Category, categoryInfo, DEFAULT_COMPOUNDING, hasSurrenderValue, isFixedIncome } from './categories.js';
 import { fixedIncomeValuation } from './fixedIncome.js';
 import { ppfStatement, RateSchedule } from './ppf.js';
+import { premiumSchedule } from './premiums.js';
 
 /**
  * Assets are plain objects whose keys match the iOS app's backup records (AssetRecord),
@@ -51,6 +52,14 @@ export const FIELD_TYPES = Object.freeze({
   policySumAssured: 'number',
   annualPremium: 'number',
   policyRenewalDate: 'date',
+  /** LIC premiums the app counts itself (see core/premiums.js): Monthly, Quarterly, Half-yearly or Yearly. */
+  premiumMode: 'string',
+  premiumInstalment: 'number',
+  premiumStartDate: 'date',
+  premiumEndDate: 'date',
+  /** When the surrender value in currentValuation was entered; without it the policy counts at the premiums paid. */
+  surrenderValueDate: 'date',
+  survivalBenefitDate: 'date',
   goldGrams: 'number',
   goldKarat: 'int',
   /** ₹ per gram for this purity, and the day it's from (see core/gold.js). */
@@ -125,11 +134,20 @@ export function recompute(a, rates = RateSchedule.official, now = Date.now()) {
       if (a.goldGrams == null || a.goldRate == null) return a;
       a.currentValuation = a.goldGrams * a.goldRate;
       break;
-    case Category.insurance:
-      if (hasSurrenderValue(a.policyType)) return a;
-      a.currentValuation = 0;
-      a.investedAmount = 0;
+    case Category.insurance: {
+      if (!hasSurrenderValue(a.policyType)) {
+        a.currentValuation = 0;
+        a.investedAmount = 0;
+        break;
+      }
+      const s = premiumSchedule(a, now);
+      if (!s) return a;
+      a.investedAmount = s.paid;
+      a.annualPremium = s.annual;
+      a.policyRenewalDate = s.next ?? undefined;
+      if (a.surrenderValueDate == null) a.currentValuation = s.paid;
       break;
+    }
     default:
       return a;
   }

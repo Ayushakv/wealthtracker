@@ -9,6 +9,9 @@ import { fileURLToPath } from 'node:url';
 import { startServer } from './serve.mjs';
 import { createAsset } from '../js/core/assets.js';
 import { exportBackup } from '../js/core/backup.js';
+import { date } from '../js/core/calendar.js';
+import { formatDate, inr } from '../js/core/format.js';
+import { premiumSchedule } from '../js/core/premiums.js';
 import { OFFICIAL_HISTORY, RateSchedule } from '../js/core/ppf.js';
 import { deriveKey } from '../js/store/crypto.js';
 import { fromBase64, readEnvelope, seal, SYNC_FILE, unseal } from '../js/store/sync.js';
@@ -509,6 +512,35 @@ try {
   await evaluate(`document.querySelector('[data-gold-grams]').closest('section').scrollIntoView()`);
   await shot('assets-gold');
 
+  step('Import an LIC policy bond: premiums counted from the first, surrender value entered by hand');
+  await click('details.menu > summary');
+  await chooseFile('[data-action="import-lic"]', fileURLToPath(new URL('../tests/fixtures/sample-lic.pdf', import.meta.url)));
+  await waitFor(`document.querySelector('dialog[open] .cas-list')`, 'LIC review dialog', 15_000);
+  assert((await text('dialog h2')) === 'Import LIC Policy', `LIC review title (${await text('dialog h2')})`);
+  const lic = premiumSchedule({ premiumMode: 'Monthly', premiumInstalment: 5225, premiumStartDate: date(2020, 1, 15), premiumEndDate: date(2031, 12, 15) }, Date.now());
+  const licReview = await text('dialog form');
+  assert(
+    ['Policy 900000001', 'Plan 999', '₹5,00,000', '₹5,225.00', '₹5,100.00 base + ₹125.00 rider', inr(lic.paid), `${lic.count} of 144 premiums`, formatDate(lic.next), 'Last premium 15 Dec 2031', '15 Jan 2040'].every((t) => licReview.includes(t)),
+    `bond read into the review (${licReview})`,
+  );
+  await shot('lic-review', { full: true });
+  await click('dialog [data-ok]');
+  await waitFor(`document.querySelector('#toast.show')?.textContent.includes('Added LIC Jeevan Sample.')`, 'LIC import toast');
+  await waitFor(`location.hash.startsWith('#/asset/') && document.querySelector('h1')?.textContent.includes('LIC Jeevan Sample')`, 'LIC detail');
+  const licHref = await evaluate('location.hash');
+  const licDetail = await text('main');
+  assert(licDetail.includes(`${lic.count} of 144 · ${inr(lic.paid)}`) && licDetail.includes(formatDate(lic.next)) && licDetail.includes('Not entered') && licDetail.includes('₹5,225.00 monthly'), `premiums counted (${licDetail})`);
+  await shot('lic-detail', { full: true });
+  await evaluate(`document.querySelector('a[href$="/edit"]').click()`);
+  await waitFor(`document.querySelector('input[name="premiumInstalment"]')`, 'LIC edit form');
+  assert(await evaluate(`document.querySelector('input[name="currentValuation"]').value === '' && document.querySelector('input[name="hasPremiumSchedule"]').checked && document.querySelector('input[name="investedAmount"]').closest('[data-show-if]').hidden`), 'surrender value blank, premiums counted');
+  await shot('lic-form', { full: true });
+  await fill('input[name="currentValuation"]', '300000');
+  await evaluate(`document.querySelector('form[data-form]').requestSubmit()`);
+  await waitFor(`location.hash === '${licHref}' && document.querySelector('main').textContent.includes('₹3,00,000') && document.querySelector('main').textContent.includes('As of')`, 'surrender value kept with its date');
+  await go('#/assets');
+  await waitFor(`${ROWS} === ${assetCount + 20}`, 'LIC policy listed');
+
   step('Sync: set up with a GitHub token → an encrypted gist is created');
   await go('#/settings');
   await waitFor(`document.querySelector('[data-action="sync-setup"]')`, 'sync section');
@@ -541,7 +573,7 @@ try {
   await click('[data-action="sync-now"]');
   await waitFor(`document.querySelector('#toast.show')?.textContent === 'Synced.'`, 'synced toast');
   await go('#/assets');
-  await waitFor(`document.querySelector('main').textContent.includes('PPF — from the laptop') && ${ROWS} === ${assetCount + 20}`, 'remote rename and new asset');
+  await waitFor(`document.querySelector('main').textContent.includes('PPF — from the laptop') && ${ROWS} === ${assetCount + 21}`, 'remote rename and new asset');
 
   step('Sync: an edit here goes up on its own');
   await go(ppfHref);
@@ -580,9 +612,9 @@ try {
   await shot('sync-passphrase-wrong');
   await fill('dialog [name="passphrase"]', SYNC_PASSPHRASE);
   await click('dialog [data-ok]');
-  await waitFor(`document.querySelector('#toast.show')?.textContent.startsWith('Sync is on. ${assetCount + 20} assets')`, 'data restored', 15_000);
+  await waitFor(`document.querySelector('#toast.show')?.textContent.startsWith('Sync is on. ${assetCount + 21} assets')`, 'data restored', 15_000);
   await go('#/assets');
-  await waitFor(`${ROWS} === ${assetCount + 20} && document.querySelector('main').textContent.includes('PPF — edited on the phone')`, 'every asset back');
+  await waitFor(`${ROWS} === ${assetCount + 21} && document.querySelector('main').textContent.includes('PPF — edited on the phone')`, 'every asset back');
   assert(github.gists.size === 1, 'still one gist');
 
   step('Turn on passcode → data encrypted at rest');

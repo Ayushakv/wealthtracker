@@ -12,9 +12,11 @@ import { isNPSStatement } from '../core/nps.js';
 import { importNPS } from './npsImport.js';
 import { isPPFStatement } from '../core/ppfStatement.js';
 import { importPPF } from './ppfImport.js';
+import { isLICBond } from '../core/licBond.js';
+import { importLIC } from './licImport.js';
 
 export const CAS_HELP =
-  'Mutual funds: request a Detailed Consolidated Account Statement on camsonline.com or kfintech.com; it arrives by email as a PDF locked with the password you choose. Bonds, SGBs, NCDs and funds in a demat account: use the monthly NSDL or CDSL CAS emailed to you (usually locked with your PAN). NPS: download the Transaction Statement for your tier from the CRA site (Protean). PPF: download the account statement from 1 April of this financial year from your bank (Axis Bank’s layout is supported). The PDF is read on this device and never uploaded.';
+  'Mutual funds: request a Detailed Consolidated Account Statement on camsonline.com or kfintech.com; it arrives by email as a PDF locked with the password you choose. Bonds, SGBs, NCDs and funds in a demat account: use the monthly NSDL or CDSL CAS emailed to you (usually locked with your PAN). NPS: download the Transaction Statement for your tier from the CRA site (Protean). PPF: download the account statement from 1 April of this financial year from your bank (Axis Bank’s layout is supported). LIC: use the policy bond PDF (the policy document with its Schedule page); import it once and the premiums are counted from then on. The PDF is read on this device and never uploaded.';
 
 /** ISIN → AMFI scheme code, bundled so no scheme list is fetched. Without it, funds keep the statement's NAV. */
 async function loadSchemeMap() {
@@ -30,7 +32,7 @@ function passwordDialog(incorrect) {
   return showDialog(
     html`<form method="dialog" class="sheet">
       <h2>Statement Password</h2>
-      <p class="muted">Enter the password you set when requesting this statement.</p>
+      <p class="muted">Enter the password for this PDF — the one you set when requesting the statement, or the one the sender gave.</p>
       <label class="field stacked">
         <span class="visually-hidden">Password</span>
         <input type="password" name="password" autocomplete="off" autocapitalize="off" spellcheck="false" required autofocus>
@@ -300,7 +302,7 @@ async function importDemat(pdf, { store, navigate }) {
 
 /**
  * Picks a statement PDF (CAMS/KFintech CAS for funds, NSDL/CDSL CAS for bonds and demat funds, or an NPS transaction
- * statement, or a bank's PPF statement), previews what changes, and saves.
+ * statement, a bank's PPF statement, or an LIC policy bond), previews what changes, and saves.
  */
 export async function importCAS({ store, navigate }) {
   const file = await pickFile('.pdf,application/pdf');
@@ -309,6 +311,10 @@ export async function importCAS({ store, navigate }) {
     const pdf = await readStatement(file);
     if (!pdf) return;
     const lines = pdf.map((r) => r.text);
+    if (isLICBond(lines)) {
+      await importLIC(pdf, { store, navigate });
+      return;
+    }
     if (isNPSStatement(lines)) {
       await importNPS(pdf, { store, navigate });
       return;

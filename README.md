@@ -2,7 +2,7 @@
 
 A private, local-first net-worth tracker for Indian portfolios. It's a website you can install on your phone's Home Screen like an app. Plain HTML, CSS and JavaScript, with no dependencies and no build step.
 
-Tracks bank accounts, real estate, mutual funds (live NAVs from mfapi.in), PPF (month-wise interest using the official rate history), NPS, bonds, fixed deposits, P2P (LenDenClub), gold (physical and digital, valued at the day's Hyderabad rate) and insurance (LIC surrender value; health and term cover are tracked but don't count towards net worth).
+Tracks bank accounts, real estate, mutual funds (live NAVs from mfapi.in), PPF (month-wise interest using the official rate history), NPS, bonds, fixed deposits, P2P (LenDenClub), gold (physical and digital, valued at the day's Hyderabad rate) and insurance (LIC policies with premiums counted automatically and their surrender value; health and term cover are tracked but don't count towards net worth).
 
 ## Where your data lives
 
@@ -63,7 +63,15 @@ Download your PPF account statement from 1 April of the current financial year (
 - It updates the PPF asset with the same account number. If none has it but exactly one PPF asset has no account number (added by hand), that one is overwritten and takes the account number. Otherwise a new asset is added.
 - A statement that starts partway through a financial year is refused, since its opening balance wouldn't be the 1 April balance.
 
-The parsers (`js/core/cas.js`, `js/core/demat.js`, `js/core/nps.js`, `js/core/ppfStatement.js`) are tested on synthetic statements. If a real statement imports wrongly, adjust the parser and add a test in `tests/cas.test.js`, `tests/demat.test.js`, `tests/nps.test.js` or `tests/ppfStatement.test.js`.
+### LIC policy bond
+
+Import the policy bond PDF (the policy document with its Schedule page, as LIC emails it or the customer portal offers it) once per policy. It reads the policy number, plan, sum assured, date of commencement, payment mode, total instalment premium (base plus riders), last premium date, maturity and first survival benefit date, and sets the policy up as an **LIC Endowment** with **Count premiums automatically** on.
+
+- From then on the app counts the premiums itself: each premium is taken as paid on its due date, stepping from the date of commencement by the payment mode (monthly, quarterly, half-yearly or yearly) up to the last premium. The premiums paid so far and the next due date (shown in Upcoming Renewals and the calendar export) update every time the app opens. Amounts are before GST, as the bond prints them; edit the instalment to count what you actually pay.
+- The bond has no surrender value. Until you enter one, the policy counts at the premiums paid. Ask LIC for the surrender value about once a year and enter it in the policy's edit form; it's kept with its date, and entering a new value without changing the date dates it today.
+- Re-importing the same policy number updates the schedule and keeps the name, notes and surrender value.
+
+The parsers (`js/core/cas.js`, `js/core/demat.js`, `js/core/nps.js`, `js/core/ppfStatement.js`, `js/core/licBond.js`) are tested on synthetic statements. If a real statement imports wrongly, adjust the parser and add a test in `tests/cas.test.js`, `tests/demat.test.js`, `tests/nps.test.js`, `tests/ppfStatement.test.js` or `tests/lic.test.js`.
 
 ## Run it locally
 

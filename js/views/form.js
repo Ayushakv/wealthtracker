@@ -6,6 +6,7 @@ import { applyGoldRate, GOLD_SOURCE, KARATS } from '../core/gold.js';
 import { formatDate, inr, plainNumber } from '../core/format.js';
 import { renewalCalendar } from '../core/ics.js';
 import { latestNAV } from '../core/mfapi.js';
+import { PREMIUM_MODES } from '../core/premiums.js';
 import { deliverFile, parseNumber, toast } from '../ui/dom.js';
 import { html, setHTML } from '../ui/html.js';
 import { icon } from '../ui/icons.js';
@@ -46,10 +47,11 @@ const segmented = (name, label, options, value) =>
     (o) => html`<label><input type="radio" name="${name}" data-type="text" value="${o}" ${o === value ? 'checked' : ''}><span>${o}</span></label>`,
   )}</div></div>`;
 
-/** Wrapper shown only while `cond` ("flag", "!flag" or "key=value") holds for the draft. */
+/** Wrapper shown only while `cond` ("flag", "!flag", "key=value", or several joined by "|" for any) holds for the draft. */
 const showIf = (cond, d, body) => html`<div data-show-if="${cond}" ${matches(cond, d) ? '' : 'hidden'}>${body}</div>`;
 
 function matches(cond, d) {
+  if (cond.includes('|')) return cond.split('|').some((c) => matches(c, d));
   if (cond.startsWith('!')) return !matches(cond.slice(1), d);
   const [key, value] = cond.split('=');
   return value === undefined ? !!d[key] : String(d[key]) === value;
@@ -247,28 +249,49 @@ function categorySections(d, { rates, now }) {
         amountField('p2pWriteOffs', 'Net defaults / write-offs', d.p2pWriteOffs),
       ]);
 
-    case Category.insurance:
+    case Category.insurance: {
+      // A policy whose premiums are counted gets its premiums paid and due date from the schedule instead.
+      const manual = `!policyType=${LIC_ENDOWMENT}|!hasPremiumSchedule`;
       return html`
         ${group({ title: 'Policy' }, [
           select('policyType', 'Type', POLICY_TYPES.map((t) => ({ value: t, label: t })), d.policyType),
           textField('policyNumber', 'Policy number', d.policyNumber),
           amountField('policySumAssured', 'Sum assured', d.policySumAssured),
-          amountField('annualPremium', 'Annual premium', d.annualPremium),
-        ])}
-        ${group({ foot: 'After saving, add the due date to your calendar for reminders 30, 15 and 3 days before.' }, [
-          toggle('hasRenewalDate', 'Renewal / premium due date', d.hasRenewalDate),
-          showIf('hasRenewalDate', d, dateField('policyRenewalDate', 'Due on', d.policyRenewalDate)),
+          showIf(manual, d, amountField('annualPremium', 'Annual premium', d.annualPremium)),
         ])}
         ${showIf(
           `policyType=${LIC_ENDOWMENT}`,
           d,
-          group({ title: 'Savings value' }, [
-            amountField('investedAmount', 'Total premiums paid', d.investedAmount),
-            amountField('currentValuation', 'Surrender / paid-up value', d.currentValuation),
+          group({ title: 'Premiums', foot: 'Premiums paid and the next due date update by themselves, counting each premium as paid on its due date. Use the total instalment from the policy bond, before GST.' }, [
+            toggle('hasPremiumSchedule', 'Count premiums automatically', d.hasPremiumSchedule),
+            showIf('hasPremiumSchedule', d, [
+              select('premiumMode', 'Paid', Object.keys(PREMIUM_MODES).map((m) => ({ value: m, label: m })), d.premiumMode),
+              amountField('premiumInstalment', 'Instalment', d.premiumInstalment),
+              dateField('premiumStartDate', 'First premium', d.premiumStartDate),
+              dateField('premiumEndDate', 'Last premium', d.premiumEndDate),
+            ]),
+          ]),
+        )}
+        ${showIf(
+          manual,
+          d,
+          group({ foot: 'After saving, add the due date to your calendar for reminders 30, 15 and 3 days before.' }, [
+            toggle('hasRenewalDate', 'Renewal / premium due date', d.hasRenewalDate),
+            showIf('hasRenewalDate', d, dateField('policyRenewalDate', 'Due on', d.policyRenewalDate)),
+          ]),
+        )}
+        ${showIf(
+          `policyType=${LIC_ENDOWMENT}`,
+          d,
+          group({ title: 'Savings value', foot: html`<span data-show-if="hasPremiumSchedule" ${d.hasPremiumSchedule ? '' : 'hidden'}>Ask LIC for the surrender value about once a year (LIC customer portal or your branch). Until you enter it, the policy counts at the premiums paid.</span>` }, [
+            showIf('!hasPremiumSchedule', d, amountField('investedAmount', 'Total premiums paid', d.investedAmount)),
+            numberField('currentValuation', 'Surrender / paid-up value', d.currentValuation, { placeholder: d.hasPremiumSchedule ? 'Not entered' : '₹0' }),
+            showIf('hasPremiumSchedule', d, dateField('surrenderValueDate', 'Value as of', d.surrenderValueDate)),
             toggle('hasMaturityDate', 'Has maturity date', d.hasMaturityDate),
             showIf('hasMaturityDate', d, dateField('maturityDate', 'Maturity', d.maturityDate)),
           ]),
         )}`;
+    }
   }
   return '';
 }

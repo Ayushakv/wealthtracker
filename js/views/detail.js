@@ -3,6 +3,7 @@ import { fromInputValue, parts, toInputValue } from '../core/calendar.js';
 import { Category, DEFAULT_COMPOUNDING } from '../core/categories.js';
 import { isDematAccount } from '../core/demat.js';
 import { GOLD_SOURCE, karatLabel } from '../core/gold.js';
+import { modeLabel, premiumSchedule } from '../core/premiums.js';
 import { formatDate, formatDateTime, formatMonth, inr, inrCompact, number, percent, plainNumber } from '../core/format.js';
 import { confirmDialog, parseNumber, showDialog } from '../ui/dom.js';
 import { html } from '../ui/html.js';
@@ -98,15 +99,44 @@ function categoryDetails(a, store, now) {
         ],
       );
 
-    case Category.insurance:
-      return group({ title: 'Policy' }, [
-        opt('Type', a.policyType),
-        opt('Policy no.', a.policyNumber),
-        opt('Sum assured', a.policySumAssured, inr),
-        opt('Annual premium', a.annualPremium, inr),
-        opt('Next due', a.policyRenewalDate, formatDate),
-        opt('Maturity', a.maturityDate, formatDate),
-      ]);
+    case Category.insurance: {
+      const s = premiumSchedule(a, now);
+      if (!s) {
+        return group({ title: 'Policy' }, [
+          opt('Type', a.policyType),
+          opt('Policy no.', a.policyNumber),
+          opt('Sum assured', a.policySumAssured, inr),
+          opt('Annual premium', a.annualPremium, inr),
+          opt('Next due', a.policyRenewalDate, formatDate),
+          opt('Maturity', a.maturityDate, formatDate),
+        ]);
+      }
+      const surrender = a.surrenderValueDate != null;
+      return html`
+        ${group({ title: 'Policy' }, [
+          opt('Type', a.policyType),
+          opt('Policy no.', a.policyNumber),
+          opt('Sum assured', a.policySumAssured, inr),
+          opt('Maturity', a.maturityDate, formatDate),
+          opt('Survival benefit from', a.survivalBenefitDate, formatDate),
+        ])}
+        ${group({ title: 'Premiums', foot: 'Counted from the first premium, each as paid on its due date. Amounts are before GST.' }, [
+          row('Instalment', `${inr(a.premiumInstalment, 2)} ${modeLabel(a.premiumMode)}`),
+          row('Paid so far', html`<span data-premiums-paid>${s.totalCount != null ? `${s.count} of ${s.totalCount}` : s.count} · ${inr(s.paid)}</span>`),
+          s.next != null ? row('Next due', formatDate(s.next)) : row('Next due', 'All premiums paid'),
+          opt('Last premium', a.premiumEndDate, formatDate),
+          opt('Total premiums', s.total, inr),
+        ])}
+        ${group(
+          {
+            title: 'Surrender value',
+            foot: surrender
+              ? 'Ask LIC for an updated surrender value about once a year and edit the policy to enter it.'
+              : 'Not entered yet, so the policy counts at the premiums paid. Ask LIC for the surrender value (customer portal or your branch) and edit the policy to enter it, about once a year.',
+          },
+          surrender ? [row('Surrender value', inr(a.currentValuation)), row('As of', formatDate(a.surrenderValueDate))] : [row('Surrender value', html`<span class="muted" data-surrender-missing>Not entered</span>`)],
+        )}`;
+    }
   }
   return '';
 }

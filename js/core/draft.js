@@ -1,7 +1,8 @@
-import { addYears, financialYearStart } from './calendar.js';
+import { addYears, financialYearStart, startOfDay } from './calendar.js';
 import { Category, DEFAULT_COMPOUNDING, isFixedIncome, LIC_ENDOWMENT } from './categories.js';
 import { createAsset, recompute } from './assets.js';
 import { DEFAULT_KARAT } from './gold.js';
+import { hasPremiumSchedule } from './premiums.js';
 
 /**
  * Editable copy of an asset, so a form can be cancelled without touching the store.
@@ -46,6 +47,12 @@ export function newDraft(category, now = Date.now()) {
     annualPremium: null,
     hasRenewalDate: true,
     policyRenewalDate: addYears(now, 1),
+    hasPremiumSchedule: false,
+    premiumMode: 'Monthly',
+    premiumInstalment: null,
+    premiumStartDate: now,
+    premiumEndDate: addYears(now, 10),
+    surrenderValueDate: now,
     goldGrams: null,
     goldKarat: DEFAULT_KARAT,
     goldRate: null,
@@ -94,11 +101,19 @@ export function draftFromAsset(a, now = Date.now()) {
     annualPremium: num(a.annualPremium),
     hasRenewalDate: a.policyRenewalDate != null,
     policyRenewalDate: a.policyRenewalDate ?? d.policyRenewalDate,
+    hasPremiumSchedule: hasPremiumSchedule(a),
+    premiumMode: a.premiumMode ?? 'Monthly',
+    premiumInstalment: num(a.premiumInstalment),
+    premiumStartDate: a.premiumStartDate ?? now,
+    premiumEndDate: a.premiumEndDate ?? d.premiumEndDate,
+    surrenderValueDate: a.surrenderValueDate ?? now,
     goldGrams: num(a.goldGrams),
     goldKarat: a.goldKarat ?? DEFAULT_KARAT,
     goldRate: num(a.goldRate),
     goldRateDate: num(a.goldRateDate),
   });
+  // A counted policy with no surrender value entered shows the field blank, not the premiums it's valued at.
+  if (d.hasPremiumSchedule && a.surrenderValueDate == null) d.currentValuation = null;
   return d;
 }
 
@@ -132,6 +147,11 @@ export function validateDraft(d) {
     case Category.gold:
       if (!((d.goldGrams ?? 0) > 0)) return 'Enter the weight in grams.';
       break;
+    case Category.insurance:
+      if (d.policyType !== LIC_ENDOWMENT || !d.hasPremiumSchedule) break;
+      if (!((d.premiumInstalment ?? 0) > 0)) return 'Enter the instalment premium.';
+      if (d.premiumEndDate < d.premiumStartDate) return 'The last premium must be on or after the first.';
+      break;
     case Category.nps: {
       const total = npsAllocationTotal(d);
       if (total > 0 && Math.abs(total - 100) > 0.5) return 'E/C/G/A split must add up to 100%.';
@@ -148,11 +168,31 @@ const nonEmpty = (s) => {
 const opt = (v) => (v == null ? undefined : v);
 
 /**
+ * LIC premiums counted by the app: the schedule replaces the premiums-paid total and the due date, and the surrender
+ * value, once entered, is kept with the day it's from. A changed value with the date left alone is from today.
+ */
+function applyPremiums(d, a, before, now) {
+  const counted = d.policyType === LIC_ENDOWMENT && d.hasPremiumSchedule;
+  a.premiumMode = counted ? d.premiumMode : undefined;
+  a.premiumInstalment = counted ? d.premiumInstalment : undefined;
+  a.premiumStartDate = counted ? d.premiumStartDate : undefined;
+  a.premiumEndDate = counted ? d.premiumEndDate : undefined;
+  if (!counted || d.currentValuation == null) {
+    a.surrenderValueDate = undefined;
+    return;
+  }
+  const previous = before?.surrenderValueDate != null ? before.currentValuation : null;
+  const dateUntouched = before?.surrenderValueDate != null && d.surrenderValueDate === before.surrenderValueDate;
+  a.surrenderValueDate = d.currentValuation !== previous && dateUntouched ? startOfDay(now) : d.surrenderValueDate;
+}
+
+/**
  * Writes the draft into `asset` (or a new asset when null) and recomputes its valuation.
  * Fields that don't belong to the category are left as they were, like the iOS app.
  * @returns the saved asset
  */
 export function applyDraft(d, asset, rates, now = Date.now()) {
+  const before = asset && { currentValuation: asset.currentValuation, surrenderValueDate: asset.surrenderValueDate };
   const a = asset ?? createAsset({ category: d.category, name: d.name }, now);
   a.name = d.name.trim();
   a.category = d.category;
@@ -210,6 +250,7 @@ export function applyDraft(d, asset, rates, now = Date.now()) {
       a.annualPremium = opt(d.annualPremium);
       a.policyRenewalDate = d.hasRenewalDate ? d.policyRenewalDate : undefined;
       a.maturityDate = d.policyType === LIC_ENDOWMENT && d.hasMaturityDate ? d.maturityDate : undefined;
+      applyPremiums(d, a, before, now);
       break;
     case Category.gold:
       a.goldGrams = d.goldGrams;
