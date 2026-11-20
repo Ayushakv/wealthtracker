@@ -381,7 +381,14 @@ try {
   const groupNamed = (name) => `[...document.querySelectorAll('section.group')].find((s) => s.querySelector('.group-title').textContent.includes(${JSON.stringify(name)}))`;
   assert(await evaluate(`${groupNamed('Mutual Funds')}.textContent.includes('EXAMPLE MUTUAL FUND')`), 'demat fund listed under Mutual Funds');
   const subSections = await evaluate(`[...${groupNamed('Bonds')}.querySelectorAll('.sub-heading > span:first-child')].map((h) => h.textContent.replace(/\\s+/g, ' ').trim())`);
-  assert(subSections.join() === 'Government Securities 1,Corporate Bonds 4,Securitised Instruments 1', `bonds split by section (${subSections})`);
+  assert(subSections.join() === 'Corporate Bonds 4,Securitised Instruments 1,Government Securities 1', `bonds split by section, largest first (${subSections})`);
+  // Categories, sections and the assets in them all run largest first.
+  const amounts = (sel) => `[...document.querySelectorAll(${JSON.stringify(sel)})].map((e) => Number(e.textContent.replace(/[^\\d.]/g, '')))`;
+  const descending = (xs) => xs.every((x, i) => i === 0 || xs[i - 1] >= x);
+  const bondRows = await evaluate(`[...${groupNamed('Bonds')}.querySelectorAll('.sub-heading')].map((h) => { const xs = []; for (let li = h.nextElementSibling; li && !li.classList.contains('sub-heading'); li = li.nextElementSibling) { const n = li.querySelector('.list-row .num'); if (n) xs.push(Number(n.textContent.replace(/[^\\d.]/g, ''))); } return xs; })`);
+  assert(bondRows.every(descending), `bonds within each section by value (${JSON.stringify(bondRows)})`);
+  const categoryTotals = await evaluate(`[...document.querySelectorAll('section.group .group-title .num')].map((e) => { const t = e.textContent.split('·').at(-1); const n = Number(t.replace(/[^\\d.]/g, '')); return /Cr/.test(t) ? n * 1e7 : /L/.test(t) ? n * 1e5 : /K/.test(t) ? n * 1e3 : n; })`);
+  assert(descending(categoryTotals), `categories by total (${categoryTotals})`);
   assert(!(await text('main')).includes('GOI LOAN'), 'unticked bond not imported');
   await shot('assets-sections', { full: true });
   const sgb = await evaluate(`[...document.querySelectorAll('a.list-row')].find((a) => a.textContent.includes('SGB 2020-21'))?.getAttribute('href')`);

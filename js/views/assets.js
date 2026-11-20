@@ -59,9 +59,12 @@ const gramsOf = (items) => plainNumber(items.reduce((s, a) => s + (a.goldGrams ?
 
 const valueOf = (items) => items.filter(countsTowardsNetWorth).reduce((s, a) => s + a.currentValuation, 0);
 
+/** Largest first; policies that add nothing to net worth (term, health) go last, by name. */
+const byValue = (a, b) => valueOf([b]) - valueOf([a]) || byName(a, b);
+
 /**
  * Bonds imported from a demat statement keep the section it listed them under (Corporate Bonds, Securitised
- * Instruments…); a category holding them is split the same way, with everything else last.
+ * Instruments…); a category holding them is split the same way, largest section first and everything else last.
  */
 function subgroups(c, items) {
   if (!items.some((a) => a.instrument)) return [{ key: c.slug, name: null, items }];
@@ -72,8 +75,9 @@ function subgroups(c, items) {
     byName.get(name).push(a);
   }
   const rank = (name) => (name == null ? Infinity : INSTRUMENT_ORDER.includes(name) ? INSTRUMENT_ORDER.indexOf(name) : INSTRUMENT_ORDER.length);
+  // Largest section first, with everything else last.
   return [...byName]
-    .sort(([a], [b]) => rank(a) - rank(b) || (a ?? '').localeCompare(b ?? ''))
+    .sort(([a, x], [b, y]) => (a == null) - (b == null) || valueOf(y) - valueOf(x) || rank(a) - rank(b) || (a ?? '').localeCompare(b ?? ''))
     .map(([name, list]) => ({ key: `${c.slug}:${name ?? ''}`, name: name ?? `Other ${c.short}`, items: list }));
 }
 
@@ -118,14 +122,16 @@ export const assetsView = {
 
   render({ store }) {
     const head = pageHead({ title: 'Assets', actions: html`${filterPicker()}${addMenu()}` });
-    const assets = [...store.assets].sort(byName);
+    const assets = [...store.assets].sort(byValue);
     if (!assets.length) {
       return html`${head}${emptyState({ iconName: 'tray', title: 'No Assets', text: 'Tap + to add a bank account, fund, policy or property.' })}`;
     }
     const visible = filter ? CATEGORIES.filter((c) => c.slug === filter) : CATEGORIES;
     const sections = visible
       .map((c) => ({ c, items: assets.filter((a) => a.category === c.raw) }))
-      .filter((s) => s.items.length);
+      .filter((s) => s.items.length)
+      // Largest category first; ties keep the usual category order.
+      .sort((x, y) => valueOf(y.items) - valueOf(x.items));
     if (!sections.length) {
       const c = visible[0];
       return html`${head}${emptyState({ iconName: c.icon, title: `No ${c.short} Assets` })}`;
