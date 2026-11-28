@@ -105,6 +105,19 @@ It opens full-screen, works offline, and refreshes NAVs when you're online.
 
 Safari can delete a website's storage after 7 days without a visit. Home Screen web apps are exempt, which is another reason to install it. Export a backup now and then anyway (Settings → Export Backup → Save to Files), or turn on sync. Note that on iPhone the Home Screen app and Safari keep separate storage.
 
+## Liquid and locked-in
+
+Net Worth splits the total into **Liquid**, which can be sold, redeemed or withdrawn within days or weeks, and
+**Locked-in**, which is retirement and long-term money that's out of reach for months or years. The Assets page is
+grouped the same way.
+
+| Liquid | Locked-in |
+|---|---|
+| Bank accounts, fixed deposits, bonds, mutual funds, gold, NPS Tier 2 | PPF, NPS Tier 1, LIC, land, P2P loans |
+
+You can change this for one asset under Edit → Liquidity. For example, mark an ELSS fund still inside its three-year
+lock-in as Locked-in. Setting an asset back to its category's default makes it follow the category again.
+
 ## Renewal reminders
 
 Websites can't reliably send notifications on iPhone. Instead, **Add to Calendar** creates a calendar file (.ics) with each policy's renewal date and alerts 30, 15 and 3 days before, at 9 am. Your calendar app shows those alerts even when this app is closed. Add it again after a due date changes.

@@ -1,6 +1,6 @@
-import { countsTowardsNetWorth, createEntry, fixedIncomeFor, gain, gainFraction, ppfStatementFor } from '../core/assets.js';
+import { accessOf, countsTowardsNetWorth, createEntry, fixedIncomeFor, gain, gainFraction, ppfStatementFor } from '../core/assets.js';
 import { fromInputValue, parts, toInputValue } from '../core/calendar.js';
-import { Category, DEFAULT_COMPOUNDING } from '../core/categories.js';
+import { accessInfo, Category, DEFAULT_COMPOUNDING } from '../core/categories.js';
 import { isDematAccount } from '../core/demat.js';
 import { GOLD_SOURCE, karatLabel } from '../core/gold.js';
 import { modeLabel, premiumSchedule } from '../core/premiums.js';
@@ -233,6 +233,7 @@ export const detailView = {
             ]
           : '',
         opt('Institution', a.institution),
+        countsTowardsNetWorth(a) ? row('Liquidity', html`<span data-access>${accessInfo(accessOf(a)).label}</span>`) : '',
         row('Last updated', formatDateTime(a.lastUpdated)),
       ])}
       ${categoryDetails(a, store, now)}

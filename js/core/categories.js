@@ -23,18 +23,32 @@ export const Bucket = Object.freeze({
   gold: 'gold',
 });
 
-/** Display order for lists and the add menu. */
+/**
+ * How soon the money can be had. Liquid: sold, redeemed or broken within days or weeks (a premature FD withdrawal or
+ * selling a listed bond included). Locked-in: held for retirement or the long term, out of reach until maturity,
+ * retirement or a sale that takes months (PPF, NPS Tier 1, LIC, land, P2P loans repaid over their term).
+ */
+export const Access = Object.freeze({ liquid: 'liquid', locked: 'locked' });
+
+export const ACCESS = [
+  { key: Access.liquid, label: 'Liquid', blurb: 'Can be sold, redeemed or withdrawn within days or weeks' },
+  { key: Access.locked, label: 'Locked-in', blurb: 'Retirement and long-term: out of reach for months or years' },
+];
+
+export const accessInfo = (key) => ACCESS.find((x) => x.key === key) ?? ACCESS[0];
+
+/** Display order for lists and the add menu. `access` is the default for the category (NPS Tier 2 is liquid). */
 export const CATEGORIES = [
-  { raw: Category.bank, slug: 'bank', short: 'Bank', icon: 'bank', bucket: Bucket.liquidCash },
-  { raw: Category.realEstate, slug: 'real-estate', short: 'Land', icon: 'map', bucket: Bucket.realEstate },
-  { raw: Category.mutualFund, slug: 'mutual-fund', short: 'Mutual Funds', icon: 'trend', bucket: Bucket.market },
-  { raw: Category.fd, slug: 'fd', short: 'FDs', icon: 'safe', bucket: Bucket.sovereignDebt },
-  { raw: Category.bonds, slug: 'bonds', short: 'Bonds', icon: 'doc', bucket: Bucket.sovereignDebt },
-  { raw: Category.p2p, slug: 'p2p', short: 'P2P', icon: 'people', bucket: Bucket.p2p },
-  { raw: Category.ppf, slug: 'ppf', short: 'PPF', icon: 'shield', bucket: Bucket.sovereignDebt },
-  { raw: Category.nps, slug: 'nps', short: 'NPS', icon: 'pension', bucket: Bucket.market },
-  { raw: Category.gold, slug: 'gold', short: 'Gold', icon: 'gold', bucket: Bucket.gold },
-  { raw: Category.insurance, slug: 'insurance', short: 'Insurance', icon: 'umbrella', bucket: Bucket.insurance },
+  { raw: Category.bank, slug: 'bank', short: 'Bank', icon: 'bank', bucket: Bucket.liquidCash, access: Access.liquid },
+  { raw: Category.realEstate, slug: 'real-estate', short: 'Land', icon: 'map', bucket: Bucket.realEstate, access: Access.locked },
+  { raw: Category.mutualFund, slug: 'mutual-fund', short: 'Mutual Funds', icon: 'trend', bucket: Bucket.market, access: Access.liquid },
+  { raw: Category.fd, slug: 'fd', short: 'FDs', icon: 'safe', bucket: Bucket.sovereignDebt, access: Access.liquid },
+  { raw: Category.bonds, slug: 'bonds', short: 'Bonds', icon: 'doc', bucket: Bucket.sovereignDebt, access: Access.liquid },
+  { raw: Category.p2p, slug: 'p2p', short: 'P2P', icon: 'people', bucket: Bucket.p2p, access: Access.locked },
+  { raw: Category.ppf, slug: 'ppf', short: 'PPF', icon: 'shield', bucket: Bucket.sovereignDebt, access: Access.locked },
+  { raw: Category.nps, slug: 'nps', short: 'NPS', icon: 'pension', bucket: Bucket.market, access: Access.locked },
+  { raw: Category.gold, slug: 'gold', short: 'Gold', icon: 'gold', bucket: Bucket.gold, access: Access.liquid },
+  { raw: Category.insurance, slug: 'insurance', short: 'Insurance', icon: 'umbrella', bucket: Bucket.insurance, access: Access.locked },
 ];
 
 const byRaw = new Map(CATEGORIES.map((c) => [c.raw, c]));

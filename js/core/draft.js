@@ -1,6 +1,6 @@
 import { addYears, financialYearStart, startOfDay } from './calendar.js';
 import { Category, DEFAULT_COMPOUNDING, isFixedIncome, LIC_ENDOWMENT } from './categories.js';
-import { createAsset, recompute } from './assets.js';
+import { accessOf, createAsset, defaultAccess, recompute } from './assets.js';
 import { DEFAULT_KARAT } from './gold.js';
 import { hasPremiumSchedule } from './premiums.js';
 
@@ -9,8 +9,12 @@ import { hasPremiumSchedule } from './premiums.js';
  * Mirrors the iOS app's AssetDraft. Optional numbers are `null` when blank.
  */
 export function newDraft(category, now = Date.now()) {
+  const access = defaultAccess({ category, npsTier: 'Tier 1' });
   return {
     category,
+    // `accessShown` is what the form started with, so an untouched choice keeps following the category (or NPS tier).
+    access,
+    accessShown: access,
     name: '',
     institution: '',
     notes: '',
@@ -65,6 +69,8 @@ export function draftFromAsset(a, now = Date.now()) {
   const str = (v) => v ?? '';
   const num = (v) => v ?? null;
   Object.assign(d, {
+    access: accessOf(a),
+    accessShown: accessOf(a),
     name: a.name,
     institution: str(a.institution),
     notes: str(a.notes),
@@ -259,6 +265,8 @@ export function applyDraft(d, asset, rates, now = Date.now()) {
       a.goldRateDate = opt(d.goldRateDate);
       break;
   }
+  if (d.access !== d.accessShown) a.access = d.access;
+  if (a.access != null && a.access === defaultAccess(a)) a.access = undefined;
   a.entries ??= [];
   a.lastUpdated = now;
   return recompute(a, rates, now);

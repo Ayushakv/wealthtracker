@@ -108,15 +108,19 @@ const cors = [
 ];
 // The gold rate file, fixed so values are predictable whatever the Action last committed.
 const GOLD_RATE = { source: '5paisa', city: 'Hyderabad', date: '2026-11-10', perGram: { 24: 10000, 22: 9160, 18: 7500 } };
+// A reload can cancel a paused request before it's answered; that answer has nowhere to go, so it's dropped.
+const answer = (params) => send('Fetch.fulfillRequest', params).catch((e) => {
+  if (!/Invalid InterceptionId/.test(e.message)) throw e;
+});
 cdp.on('Fetch.requestPaused', ({ requestId, request }) => {
   if (request.url.includes('/rates/gold.json')) {
     const body = Buffer.from(JSON.stringify(GOLD_RATE)).toString('base64');
-    return send('Fetch.fulfillRequest', { requestId, responseCode: 200, responseHeaders: [{ name: 'Content-Type', value: 'application/json' }], body });
+    return answer({ requestId, responseCode: 200, responseHeaders: [{ name: 'Content-Type', value: 'application/json' }], body });
   }
-  if (request.method === 'OPTIONS') return send('Fetch.fulfillRequest', { requestId, responseCode: 204, responseHeaders: cors });
+  if (request.method === 'OPTIONS') return answer({ requestId, responseCode: 204, responseHeaders: cors });
   const body = request.postData ?? (request.postDataEntries ? Buffer.concat(request.postDataEntries.map((e) => Buffer.from(e.bytes ?? '', 'base64'))).toString() : undefined);
   const res = github.handle({ method: request.method, url: request.url, headers: request.headers, body });
-  send('Fetch.fulfillRequest', {
+  answer({
     requestId,
     responseCode: res.status,
     responseHeaders: [...cors, { name: 'Content-Type', value: 'application/json' }],
@@ -286,6 +290,41 @@ try {
   assert(await evaluate(`[...${fdGroup}.querySelectorAll('a.list-row .name')].map((n) => n.textContent).join() === 'HDFC Bank FD,SBI FD'`), 'FD listed under Fixed Deposits');
   assert(await evaluate(`[...document.querySelectorAll('a.list-row .name')].some((n) => n.textContent === 'PPF — renamed')`), 'rename kept');
 
+  step('Liquid and locked-in: split on the dashboard and the Assets page, and set by hand');
+  const tierOf = (name) => `[...document.querySelectorAll('.tier')].find((t) => [...t.querySelectorAll('a.list-row .name')].some((n) => n.textContent === ${JSON.stringify(name)}))?.dataset.access`;
+  assert((await evaluate(`[...document.querySelectorAll('.tier')].map((t) => t.dataset.access).join()`)) === 'liquid,locked', 'liquid first, then locked-in');
+  assert((await evaluate(`[...document.querySelectorAll('.tier-head > span:first-child')].map((h) => h.textContent).join()`)) === 'Liquid,Locked-in', 'tier headings');
+  assert((await evaluate(tierOf('PPF — renamed'))) === 'locked', 'PPF is locked in');
+  assert((await evaluate(tierOf('SBI FD'))) === 'liquid', 'an FD is liquid');
+  const rupees = (sel) => `Number(document.querySelector(${JSON.stringify(sel)}).textContent.replace(/[^\\d.-]/g, ''))`;
+  await go('#/dashboard');
+  await waitFor(`document.querySelector('.access-split')`, 'liquid / locked-in split');
+  const [hero, liquid, locked] = await evaluate(`[${rupees('.hero')}, ${rupees('[data-access-total="liquid"] .metric')}, ${rupees('[data-access-total="locked"] .metric')}]`);
+  assert(Math.abs(liquid + locked - hero) <= 1 && liquid > 0 && locked > 0, `the two add up to the total (${liquid} + ${locked} vs ${hero})`);
+  assert((await evaluate(`document.querySelectorAll('.access-bar rect').length`)) === 2, 'two-part bar');
+  await shot('dashboard-access', { full: true });
+  await go('#/assets');
+  await waitFor(`document.querySelector('.tier')`, 'assets again');
+  const sbi = await evaluate(`[...document.querySelectorAll('a.list-row')].find((a) => a.querySelector('.name').textContent === 'SBI FD').getAttribute('href')`);
+  await go(`${sbi}/edit`);
+  await waitFor(`document.querySelector('[name="access"]')`, 'liquidity picker');
+  assert((await evaluate(`document.querySelector('[name="access"]').value`)) === 'liquid', 'FD defaults to liquid');
+  await evaluate(`(() => { const s = document.querySelector('[name="access"]'); s.value = 'locked'; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await click('[data-save]');
+  await waitFor(`location.hash === '#/assets'`, 'saved');
+  await go(sbi);
+  await waitFor(`document.querySelector('[data-access]')?.textContent === 'Locked-in'`, 'detail shows locked-in');
+  await go('#/assets');
+  await waitFor(`${tierOf('SBI FD')} === 'locked'`, 'FD moved to locked-in');
+  assert(await evaluate(`[...document.querySelector('.tier[data-access="locked"]').querySelectorAll('.group-title')].some((h) => h.textContent.includes('Fixed Deposits'))`), 'its category shows under locked-in too');
+  await shot('assets-tiers', { full: true });
+  await go(`${sbi}/edit`);
+  await waitFor(`document.querySelector('[name="access"]')`, 'liquidity picker');
+  await evaluate(`(() => { const s = document.querySelector('[name="access"]'); s.value = 'liquid'; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await click('[data-save]');
+  await waitFor(`location.hash === '#/assets'`, 'saved');
+  await waitFor(`${tierOf('SBI FD')} === 'liquid'`, 'FD back under liquid');
+
   step('Settings and PPF rates');
   await go('#/settings');
   await waitFor(`document.querySelector('[data-action="export"]')`, 'settings');
@@ -382,13 +421,12 @@ try {
   assert(await evaluate(`${groupNamed('Mutual Funds')}.textContent.includes('EXAMPLE MUTUAL FUND')`), 'demat fund listed under Mutual Funds');
   const subSections = await evaluate(`[...${groupNamed('Bonds')}.querySelectorAll('.sub-heading > span:first-child')].map((h) => h.textContent.replace(/\\s+/g, ' ').trim())`);
   assert(subSections.join() === 'Corporate Bonds 4,Securitised Instruments 1,Government Securities 1', `bonds split by section, largest first (${subSections})`);
-  // Categories, sections and the assets in them all run largest first.
-  const amounts = (sel) => `[...document.querySelectorAll(${JSON.stringify(sel)})].map((e) => Number(e.textContent.replace(/[^\\d.]/g, '')))`;
+  // Categories (within liquid and locked-in), sections and the assets in them all run largest first.
   const descending = (xs) => xs.every((x, i) => i === 0 || xs[i - 1] >= x);
   const bondRows = await evaluate(`[...${groupNamed('Bonds')}.querySelectorAll('.sub-heading')].map((h) => { const xs = []; for (let li = h.nextElementSibling; li && !li.classList.contains('sub-heading'); li = li.nextElementSibling) { const n = li.querySelector('.list-row .num'); if (n) xs.push(Number(n.textContent.replace(/[^\\d.]/g, ''))); } return xs; })`);
   assert(bondRows.every(descending), `bonds within each section by value (${JSON.stringify(bondRows)})`);
-  const categoryTotals = await evaluate(`[...document.querySelectorAll('section.group .group-title .num')].map((e) => { const t = e.textContent.split('·').at(-1); const n = Number(t.replace(/[^\\d.]/g, '')); return /Cr/.test(t) ? n * 1e7 : /L/.test(t) ? n * 1e5 : /K/.test(t) ? n * 1e3 : n; })`);
-  assert(descending(categoryTotals), `categories by total (${categoryTotals})`);
+  const categoryTotals = await evaluate(`[...document.querySelectorAll('.tier')].map((tier) => [...tier.querySelectorAll('section.group .group-title .num')].map((e) => { const t = e.textContent.split('·').at(-1); const n = Number(t.replace(/[^\\d.]/g, '')); return /Cr/.test(t) ? n * 1e7 : /L/.test(t) ? n * 1e5 : /K/.test(t) ? n * 1e3 : n; }))`);
+  assert(categoryTotals.length === 2 && categoryTotals.every(descending), `categories by total within each tier (${JSON.stringify(categoryTotals)})`);
   assert(!(await text('main')).includes('GOI LOAN'), 'unticked bond not imported');
   await shot('assets-sections', { full: true });
   const sgb = await evaluate(`[...document.querySelectorAll('a.list-row')].find((a) => a.textContent.includes('SGB 2020-21'))?.getAttribute('href')`);

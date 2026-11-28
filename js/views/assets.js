@@ -1,5 +1,5 @@
-import { byName, countsTowardsNetWorth } from '../core/assets.js';
-import { CATEGORIES, Category, categoryInfo } from '../core/categories.js';
+import { accessOf, byName, countsTowardsNetWorth } from '../core/assets.js';
+import { ACCESS, CATEGORIES, Category, categoryInfo } from '../core/categories.js';
 import { INSTRUMENT_ORDER } from '../core/demat.js';
 import { formatDate, inr, inrCompact, number, plainNumber } from '../core/format.js';
 import { html } from '../ui/html.js';
@@ -66,8 +66,8 @@ const byValue = (a, b) => valueOf([b]) - valueOf([a]) || byName(a, b);
  * Bonds imported from a demat statement keep the section it listed them under (Corporate Bonds, Securitised
  * Instruments…); a category holding them is split the same way, largest section first and everything else last.
  */
-function subgroups(c, items) {
-  if (!items.some((a) => a.instrument)) return [{ key: c.slug, name: null, items }];
+function subgroups(c, items, prefix = '') {
+  if (!items.some((a) => a.instrument)) return [{ key: prefix + c.slug, name: null, items }];
   const byName = new Map();
   for (const a of items) {
     const name = a.instrument ?? null;
@@ -78,7 +78,7 @@ function subgroups(c, items) {
   // Largest section first, with everything else last.
   return [...byName]
     .sort(([a, x], [b, y]) => (a == null) - (b == null) || valueOf(y) - valueOf(x) || rank(a) - rank(b) || (a ?? '').localeCompare(b ?? ''))
-    .map(([name, list]) => ({ key: `${c.slug}:${name ?? ''}`, name: name ?? `Other ${c.short}`, items: list }));
+    .map(([name, list]) => ({ key: `${prefix}${c.slug}:${name ?? ''}`, name: name ?? `Other ${c.short}`, items: list }));
 }
 
 /** A run of assets; a long one shows the first few and a button for the rest (unless a category filter is picked). */
@@ -92,6 +92,17 @@ function assetRun({ key, name, items }, titled) {
     ? html`<li><button class="row row-button" data-action="toggle-group" data-group="${key}" data-total="${items.length}" data-shown="${preview}" aria-expanded="${String(open)}">
         ${icon('chevron', open ? 'chev-up' : 'chev-down')}${open ? 'Show fewer' : `Show all ${items.length}`}</button></li>`
     : ''}`;
+}
+
+function categorySection(c, items, prefix) {
+  const runs = subgroups(c, items, prefix);
+  return html`<section class="group">
+    <h2 class="group-title split">
+      <span>${icon(c.icon)} ${c.raw}${items.length > PREVIEW + 1 ? html` <span class="count">${items.length}</span>` : ''}</span>
+      <span class="num">${c.raw === Category.gold ? html`<span class="muted" data-gold-grams>${gramsOf(items)} g · </span>` : ''}${inrCompact(valueOf(items))}</span>
+    </h2>
+    <ul class="group-body plain-list">${runs.map((run) => assetRun(run, runs.length > 1))}</ul>
+  </section>`;
 }
 
 function addMenu() {
@@ -127,25 +138,24 @@ export const assetsView = {
       return html`${head}${emptyState({ iconName: 'tray', title: 'No Assets', text: 'Tap + to add a bank account, fund, policy or property.' })}`;
     }
     const visible = filter ? CATEGORIES.filter((c) => c.slug === filter) : CATEGORIES;
-    const sections = visible
-      .map((c) => ({ c, items: assets.filter((a) => a.category === c.raw) }))
-      .filter((s) => s.items.length)
-      // Largest category first; ties keep the usual category order.
-      .sort((x, y) => valueOf(y.items) - valueOf(x.items));
-    if (!sections.length) {
+    // Liquid first, then locked-in; within each, the largest category first (ties keep the usual category order).
+    const tiers = ACCESS.map((t) => {
+      const inTier = assets.filter((a) => accessOf(a) === t.key);
+      const sections = visible
+        .map((c) => ({ c, items: inTier.filter((a) => a.category === c.raw) }))
+        .filter((x) => x.items.length)
+        .sort((x, y) => valueOf(y.items) - valueOf(x.items));
+      return { t, sections, items: sections.flatMap((x) => x.items) };
+    }).filter((x) => x.sections.length);
+    if (!tiers.length) {
       const c = visible[0];
       return html`${head}${emptyState({ iconName: c.icon, title: `No ${c.short} Assets` })}`;
     }
-    return html`${head}${sections.map(({ c, items }) => {
-      const runs = subgroups(c, items);
-      return html`<section class="group">
-        <h2 class="group-title split">
-          <span>${icon(c.icon)} ${c.raw}${items.length > PREVIEW + 1 ? html` <span class="count">${items.length}</span>` : ''}</span>
-          <span class="num">${c.raw === Category.gold ? html`<span class="muted" data-gold-grams>${gramsOf(items)} g · </span>` : ''}${inrCompact(valueOf(items))}</span>
-        </h2>
-        <ul class="group-body plain-list">${runs.map((run) => assetRun(run, runs.length > 1))}</ul>
-      </section>`;
-    })}`;
+    return html`${head}${tiers.map(({ t, sections, items }) => html`<div class="tier" data-access="${t.key}">
+      <h2 class="tier-head split"><span>${t.label}</span><span class="num">${inrCompact(valueOf(items))}</span></h2>
+      <p class="tier-blurb muted small">${t.blurb}</p>
+      ${sections.map(({ c, items }) => categorySection(c, items, t.key === c.access ? '' : `${t.key}:`))}
+    </div>`)}`;
   },
 
   mount(root) {

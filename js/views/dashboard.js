@@ -1,6 +1,6 @@
-import { allocation, totals, upcomingRenewals } from '../core/assets.js';
+import { accessTotals, allocation, totals, upcomingRenewals } from '../core/assets.js';
 import { daysBetween, startOfDay } from '../core/calendar.js';
-import { Category } from '../core/categories.js';
+import { accessInfo, Category } from '../core/categories.js';
 import { formatDate, formatRelative, inr, percent, signedCompact } from '../core/format.js';
 import { GOLD_SOURCE, rateForKarat } from '../core/gold.js';
 import { renewalCalendar } from '../core/ics.js';
@@ -16,11 +16,31 @@ function refreshButton(store) {
   </button>`;
 }
 
-function summaryCard(t) {
+/** Liquid against locked-in: a two-part bar, then each part's value and share. */
+function accessSplit(s) {
+  const W = 1000;
+  const GAP = s.liquid > 0 && s.locked > 0 ? 6 : 0;
+  const liquidW = Math.round((W - GAP) * s.liquidShare);
+  const part = (key, value, share) => html`<div data-access-total="${key}">
+    <p class="muted small"><span class="key-dot ${key}"></span>${accessInfo(key).label}</p>
+    <p class="metric num">${inr(value)}</p>
+    <p class="muted small">${percent(share)} of total</p>
+  </div>`;
+  return html`<div class="access-split">
+    <svg class="access-bar" viewBox="0 0 ${W} 10" preserveAspectRatio="none" role="img" aria-label="Liquid ${percent(s.liquidShare)}, locked-in ${percent(s.lockedShare)}">
+      ${s.liquid > 0 ? html`<rect class="liquid" x="0" y="0" width="${liquidW}" height="10"/>` : ''}
+      ${s.locked > 0 ? html`<rect class="locked" x="${liquidW + GAP}" y="0" width="${W - liquidW - GAP}" height="10"/>` : ''}
+    </svg>
+    <div class="metrics">${part('liquid', s.liquid, s.liquidShare)}${part('locked', s.locked, s.lockedShare)}</div>
+  </div>`;
+}
+
+function summaryCard(t, split) {
   return html`
     <section class="card summary">
       <p class="muted small">Total Portfolio Value</p>
       <p class="hero num">${inr(t.value)}</p>
+      ${t.value > 0 ? accessSplit(split) : ''}
       <hr>
       <div class="metrics">
         <div>
@@ -93,7 +113,7 @@ export const dashboardView = {
     return html`
       ${head}
       <div class="dash">
-        ${summaryCard(totals(store.assets))}
+        ${summaryCard(totals(store.assets), accessTotals(store.assets))}
         <section class="card allocation">
           <h2>Allocation</h2>
           ${slices.length ? donut(slices) : html`<p class="muted">Nothing to chart yet — values are all zero.</p>`}

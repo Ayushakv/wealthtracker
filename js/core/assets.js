@@ -1,5 +1,5 @@
 import { addDays, financialYearStart, startOfDay } from './calendar.js';
-import { BUCKETS, Category, categoryInfo, DEFAULT_COMPOUNDING, hasSurrenderValue, isFixedIncome } from './categories.js';
+import { Access, BUCKETS, Category, categoryInfo, DEFAULT_COMPOUNDING, hasSurrenderValue, isFixedIncome } from './categories.js';
 import { fixedIncomeValuation } from './fixedIncome.js';
 import { ppfStatement, RateSchedule } from './ppf.js';
 import { premiumSchedule } from './premiums.js';
@@ -31,6 +31,8 @@ export const FIELD_TYPES = Object.freeze({
   isin: 'string',
   /** The statement section a demat holding was listed under, e.g. "Corporate Bonds" or "Securitised Instruments". */
   instrument: 'string',
+  /** "liquid" or "locked" when set by hand; otherwise the category's default (see accessOf). */
+  access: 'string',
   pran: 'string',
   npsTier: 'string',
   npsEquityPct: 'number',
@@ -84,6 +86,23 @@ export const gainFraction = (a) => (a.investedAmount > 0 ? gain(a) / a.investedA
 /** Pure-risk covers (term, health, vehicle) don't count towards net worth. */
 export function countsTowardsNetWorth(a) {
   return a.category !== Category.insurance || hasSurrenderValue(a.policyType);
+}
+
+/** Liquid or locked-in, as the category has it unless set by hand. NPS Tier 2 can be withdrawn any time. */
+export function defaultAccess(a) {
+  if (a.category === Category.nps) return a.npsTier === 'Tier 2' ? Access.liquid : Access.locked;
+  return categoryInfo(a.category).access;
+}
+
+export const accessOf = (a) => (a.access === Access.liquid || a.access === Access.locked ? a.access : defaultAccess(a));
+
+/** Net worth split into what can be had within weeks and what's locked in, with each share of the total. */
+export function accessTotals(assets) {
+  const sums = { [Access.liquid]: 0, [Access.locked]: 0 };
+  for (const a of assets) if (countsTowardsNetWorth(a)) sums[accessOf(a)] += a.currentValuation;
+  const total = sums.liquid + sums.locked;
+  const share = (v) => (total > 0 ? v / total : 0);
+  return { liquid: sums.liquid, locked: sums.locked, liquidShare: share(sums.liquid), lockedShare: share(sums.locked) };
 }
 
 export function ppfStatementFor(a, rates = RateSchedule.official, asOf = Date.now()) {

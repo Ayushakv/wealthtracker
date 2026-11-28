@@ -1,5 +1,5 @@
 import { financialYearStart, fromInputValue, fyLabel, toInputValue } from '../core/calendar.js';
-import { categoryBySlug, categoryInfo, Category, COMPOUNDING, isFixedIncome, LIC_ENDOWMENT, NPS_TIERS, POLICY_TYPES } from '../core/categories.js';
+import { ACCESS, categoryBySlug, categoryInfo, Category, COMPOUNDING, isFixedIncome, LIC_ENDOWMENT, NPS_TIERS, POLICY_TYPES } from '../core/categories.js';
 import { applyDraft, draftFromAsset, newDraft, npsAllocationTotal, validateDraft } from '../core/draft.js';
 import { fixedIncomeValuation } from '../core/fixedIncome.js';
 import { applyGoldRate, GOLD_SOURCE, KARATS } from '../core/gold.js';
@@ -359,9 +359,10 @@ export const formView = {
           actions: html`<button type="button" class="btn" data-action="cancel">Cancel</button>
             <button type="submit" class="btn btn-primary" data-save ${error ? 'disabled' : ''}>Save</button>`,
         })}
-        ${group({}, [
+        ${group({ foot: 'Liquid: can be sold, redeemed or withdrawn within days or weeks. Locked-in: retirement or long-term money you can’t get at until maturity, retirement or a slow sale.' }, [
           textField('name', 'Name', d.name),
           textField('institution', institutionLabel(d.category), d.institution, d.category === Category.gold ? { placeholder: 'Paytm, Gullak, home locker…' } : {}),
+          select('access', 'Liquidity', ACCESS.map((x) => ({ value: x.key, label: x.label })), d.access),
         ])}
         ${categorySections(d, { rates: ctx.store.rates, now: ctx.now })}
         ${group({ title: 'Notes' }, textField('notes', 'Notes', d.notes, {
